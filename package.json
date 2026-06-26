@@ -18,13 +18,11 @@
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "firebase": "^9.23.0",
-    "firebaseui": "^6.1.0",
     "html2pdf.js": "^0.14.0",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
-    "react-firebaseui": "^6.0.0",
     "recharts": "^3.9.0",
     "tailwind-merge": "^3.6.0",
     "vite": "^6.2.3"
