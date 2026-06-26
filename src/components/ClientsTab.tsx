@@ -24,30 +24,42 @@ export default function ClientsTab({ user }: ClientsTabProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isEditing) {
-      const client = clients.find(c => c.id === isEditing);
-      if (client) {
-        await addOrUpdateItem({ 
-          ...client, 
+    try {
+      if (isEditing) {
+        const client = clients.find(c => c.id === isEditing);
+        if (client) {
+          const updatedClient: any = { 
+            ...client, 
+            ...formData, 
+            defaultRate: Number(formData.defaultRate)
+          };
+          if (formData.onSiteShootRate) updatedClient.onSiteShootRate = Number(formData.onSiteShootRate);
+          else delete updatedClient.onSiteShootRate;
+          
+          if (formData.websiteMakingRate) updatedClient.websiteMakingRate = Number(formData.websiteMakingRate);
+          else delete updatedClient.websiteMakingRate;
+
+          await addOrUpdateItem(updatedClient);
+        }
+        setIsEditing(null);
+      } else {
+        const newClient: any = { 
           ...formData, 
-          defaultRate: Number(formData.defaultRate),
-          onSiteShootRate: formData.onSiteShootRate ? Number(formData.onSiteShootRate) : undefined,
-          websiteMakingRate: formData.websiteMakingRate ? Number(formData.websiteMakingRate) : undefined
-        });
+          id: crypto.randomUUID(), 
+          defaultRate: Number(formData.defaultRate), 
+          createdAt: Date.now() 
+        };
+        if (formData.onSiteShootRate) newClient.onSiteShootRate = Number(formData.onSiteShootRate);
+        if (formData.websiteMakingRate) newClient.websiteMakingRate = Number(formData.websiteMakingRate);
+
+        await addOrUpdateItem(newClient as Client);
       }
-      setIsEditing(null);
-    } else {
-      await addOrUpdateItem({ 
-        ...formData, 
-        id: crypto.randomUUID(), 
-        defaultRate: Number(formData.defaultRate), 
-        onSiteShootRate: formData.onSiteShootRate ? Number(formData.onSiteShootRate) : undefined,
-        websiteMakingRate: formData.websiteMakingRate ? Number(formData.websiteMakingRate) : undefined,
-        createdAt: Date.now() 
-      } as Client);
+      setFormData({ name: '', phone: '', email: '', defaultRate: '', onSiteShootRate: '', websiteMakingRate: '' });
+      setIsFormOpen(false);
+    } catch (err) {
+      console.error(err);
+      alert("Error saving client. Check console.");
     }
-    setFormData({ name: '', phone: '', email: '', defaultRate: '', onSiteShootRate: '', websiteMakingRate: '' });
-    setIsFormOpen(false);
   };
   
   const editClient = (c: Client) => {
