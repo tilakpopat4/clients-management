@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, FileText, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, LogOut, ClipboardList } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Tab } from '../App';
 import { User } from 'firebase/auth';
@@ -14,6 +14,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: Sid
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'clients', label: 'Clients', icon: Users },
+    { id: 'work', label: 'Work Log', icon: ClipboardList },
     { id: 'invoice', label: 'Invoice Generator', icon: FileText },
   ] as const;
 

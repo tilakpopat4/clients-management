@@ -8,10 +8,11 @@ import Sidebar from './components/Sidebar';
 import DashboardTab from './components/DashboardTab';
 import ClientsTab from './components/ClientsTab';
 import InvoiceTab from './components/InvoiceTab';
+import { WorkLogTab } from './components/WorkLogTab';
 import { auth, googleProvider } from './firebase';
 import { signInWithPopup, onAuthStateChanged, User, signOut } from 'firebase/auth';
 
-export type Tab = 'dashboard' | 'clients' | 'invoice';
+export type Tab = 'dashboard' | 'clients' | 'work' | 'invoice';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
@@ -77,6 +78,7 @@ export default function App() {
       <main className="flex-1 overflow-y-auto relative pb-20 md:pb-0">
         {activeTab === 'dashboard' && <DashboardTab user={user} />}
         {activeTab === 'clients' && <ClientsTab user={user} />}
+        {activeTab === 'work' && <WorkLogTab user={user} />}
         {activeTab === 'invoice' && <InvoiceTab user={user} />}
       </main>
     </div>

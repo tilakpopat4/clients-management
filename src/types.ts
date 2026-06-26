@@ -16,6 +16,18 @@ export interface Reel {
   rate: number;
 }
 
+export interface WorkItem {
+  id: string;
+  clientId: string;
+  description: string;
+  quantity: number;
+  rate: number;
+  date: number;
+  status: 'Uninvoiced' | 'Invoiced';
+  invoiceId?: string;
+  createdAt: number;
+}
+
 export interface Invoice {
   id: string;
   date: number;

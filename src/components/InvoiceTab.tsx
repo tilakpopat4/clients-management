@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
-import { Client, Reel, Invoice } from '../types';
-import { Plus, Trash2, Download, Receipt } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Client, Reel, Invoice, WorkItem } from '../types';
+import { Plus, Trash2, Download, Receipt, FileCheck } from 'lucide-react';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 import { useFirestore } from '../hooks/useFirestore';
@@ -12,28 +12,45 @@ interface InvoiceTabProps {
 
 export default function InvoiceTab({ user }: InvoiceTabProps) {
   const { data: clients, loading: clientsLoading } = useFirestore<Client>('clients', user?.uid);
-  const { data: invoices, addOrUpdateItem } = useFirestore<Invoice>('invoices', user?.uid);
+  const { data: invoices, addOrUpdateItem: addInvoice } = useFirestore<Invoice>('invoices', user?.uid);
+  const { data: workItems, addOrUpdateItem: updateWorkItem } = useFirestore<WorkItem>('workItems', user?.uid);
   
   const [selectedClientId, setSelectedClientId] = useState<string>('');
-  const [reels, setReels] = useState<Reel[]>([
-    { id: crypto.randomUUID(), title: '', quantity: 1, rate: 0 }
-  ]);
+  const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [reels, setReels] = useState<Reel[]>([]);
+  const [linkedWorkItemIds, setLinkedWorkItemIds] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
 
   const selectedClient = clients.find(c => c.id === selectedClientId);
 
-  const handleClientChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const clientId = e.target.value;
-    setSelectedClientId(clientId);
-    const client = clients.find(c => c.id === clientId);
-    
-    // Automatically apply default rate to all existing reels that don't have a specific rate set
-    if (client) {
-      setReels(reels.map(r => ({
-        ...r,
-        rate: r.rate === 0 ? client.defaultRate : r.rate
-      })));
+  useEffect(() => {
+    if (selectedClientId && selectedMonth) {
+      // Find uninvoiced work items for this client in the selected month
+      const uninvoicedWork = workItems.filter(w => {
+        if (w.clientId !== selectedClientId) return false;
+        if (w.status !== 'Uninvoiced') return false;
+        
+        const workMonth = new Date(w.date).toISOString().slice(0, 7);
+        return workMonth === selectedMonth;
+      });
+      
+      if (uninvoicedWork.length > 0) {
+        setReels(uninvoicedWork.map(w => ({
+          id: crypto.randomUUID(),
+          title: w.description,
+          quantity: w.quantity,
+          rate: w.rate
+        })));
+        setLinkedWorkItemIds(uninvoicedWork.map(w => w.id));
+      } else {
+        setReels([{ id: crypto.randomUUID(), title: '', quantity: 1, rate: selectedClient ? selectedClient.defaultRate : 0 }]);
+        setLinkedWorkItemIds([]);
+      }
     }
+  }, [selectedClientId, selectedMonth, workItems]);
+
+  const handleClientChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedClientId(e.target.value);
   };
 
   const addItem = (defaultTitle: string, defaultRate: number) => {
@@ -95,7 +112,19 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
       };
       
       try {
-        await addOrUpdateItem(newInvoice);
+        await addInvoice(newInvoice);
+        
+        // Mark linked work items as invoiced
+        for (const workId of linkedWorkItemIds) {
+          const workItem = workItems.find(w => w.id === workId);
+          if (workItem) {
+            await updateWorkItem({ ...workItem, status: 'Invoiced', invoiceId: newInvoice.id });
+          }
+        }
+        
+        // Clear selection after successful generation
+        setReels([{ id: crypto.randomUUID(), title: '', quantity: 1, rate: selectedClient.defaultRate }]);
+        setLinkedWorkItemIds([]);
       } catch (err) {
         console.error("Error saving to cloud:", err);
       }
@@ -144,6 +173,17 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
                 {clients.length === 0 && (
                   <p className="text-xs text-amber-600 mt-1">Please add a client in the Clients tab first.</p>
                 )}
+              </div>
+              
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Select Month *</label>
+                <input 
+                  type="month"
+                  className="w-full border border-slate-200 rounded px-3 py-2 text-sm bg-slate-50 outline-none transition-colors focus:border-indigo-500"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                />
+                <p className="text-xs text-slate-400 mt-1">Automatically loads uninvoiced work for this month.</p>
               </div>
             </div>
           </div>
