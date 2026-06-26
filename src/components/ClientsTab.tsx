@@ -30,7 +30,9 @@ export default function ClientsTab({ user }: ClientsTabProps) {
         if (client) {
           const updatedClient: any = { 
             ...client, 
-            ...formData, 
+            name: formData.name,
+            phone: formData.phone,
+            email: formData.email,
             defaultRate: Number(formData.defaultRate)
           };
           if (formData.onSiteShootRate) updatedClient.onSiteShootRate = Number(formData.onSiteShootRate);
@@ -44,8 +46,10 @@ export default function ClientsTab({ user }: ClientsTabProps) {
         setIsEditing(null);
       } else {
         const newClient: any = { 
-          ...formData, 
           id: crypto.randomUUID(), 
+          name: formData.name,
+          phone: formData.phone,
+          email: formData.email,
           defaultRate: Number(formData.defaultRate), 
           createdAt: Date.now() 
         };
