@@ -140,13 +140,13 @@ export default function DashboardTab({ user }: DashboardTabProps) {
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
-      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="mb-8 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Dashboard</h2>
           <p className="text-slate-500 mt-1">Overview of your monthly earnings and due payments.</p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {(localStorage.getItem('clients') || localStorage.getItem('monthlyWork')) ? (
             <button 
               onClick={migrateLocalData}

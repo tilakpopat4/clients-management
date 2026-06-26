@@ -97,7 +97,7 @@ export default function ClientsTab({ user }: ClientsTabProps) {
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
           <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Client Management</h2>
           <p className="text-slate-500 mt-1">Manage your clients and default reel rates.</p>
@@ -106,7 +106,7 @@ export default function ClientsTab({ user }: ClientsTabProps) {
         {!isFormOpen && (
           <button 
             onClick={() => setIsFormOpen(true)}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors shadow-sm"
+            className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors shadow-sm w-full md:w-auto"
           >
             <Plus size={16} />
             Add New Client

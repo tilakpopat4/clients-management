@@ -255,7 +255,7 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
           </div>
           
           {/* This wrapper scales the visual preview so it fits on screen without changing actual dimensions for PDF export */}
-          <div className="transform scale-[0.6] sm:scale-[0.7] md:scale-[0.8] xl:scale-[0.9] origin-top transition-transform duration-300">
+          <div className="transform scale-[0.4] min-[400px]:scale-[0.45] sm:scale-[0.6] md:scale-[0.8] xl:scale-[0.9] origin-top transition-transform duration-300">
             
             {/* The actual A4 element captured by html2pdf */}
             <div 
