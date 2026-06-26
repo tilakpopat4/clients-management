@@ -1,0 +1,32 @@
+{
+  "collections": [
+    {
+      "name": "clients",
+      "path": "clients/{clientId}",
+      "rules": [
+        {
+          "operations": ["read", "update", "delete"],
+          "condition": "request.auth != null && request.auth.uid == resource.data.userId"
+        },
+        {
+          "operations": ["create"],
+          "condition": "request.auth != null && request.resource.data.userId == request.auth.uid"
+        }
+      ]
+    },
+    {
+      "name": "invoices",
+      "path": "invoices/{invoiceId}",
+      "rules": [
+        {
+          "operations": ["read", "update", "delete"],
+          "condition": "request.auth != null && request.auth.uid == resource.data.userId"
+        },
+        {
+          "operations": ["create"],
+          "condition": "request.auth != null && request.resource.data.userId == request.auth.uid"
+        }
+      ]
+    }
+  ]
+}

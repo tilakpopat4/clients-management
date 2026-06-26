@@ -1,0 +1,6 @@
+{
+  "name": "Freelance Video Editor Dashboard",
+  "description": "A dashboard for freelance video editors to manage clients, generate invoices, and track monthly work.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
