@@ -13,6 +13,7 @@ interface WorkLogTabProps {
 export function WorkLogTab({ user }: WorkLogTabProps) {
   const { data: clients, loading: clientsLoading } = useFirestore<Client>('clients', user.uid);
   const { data: workItems, loading: workLoading, addOrUpdateItem, removeItem } = useFirestore<WorkItem>('workItems', user.uid);
+  const { data: invoices, loading: invoicesLoading, addOrUpdateItem: addOrUpdateInvoice, removeItem: removeInvoice } = useFirestore<any>('invoices', user.uid);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formData, setFormData] = useState({
@@ -49,13 +50,51 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
     }
   };
 
-  const deleteWork = async (id: string) => {
-    if (confirm('Are you sure you want to delete this work log?')) {
-      await removeItem(id);
+  const deleteWork = async (item: WorkItem) => {
+    const isInvoiced = item.status === 'Invoiced';
+    const message = isInvoiced 
+      ? 'This work log is currently invoiced. Deleting it will also remove it from the associated invoice and adjust the invoice totals. Are you sure you want to delete this work log?' 
+      : 'Are you sure you want to delete this work log?';
+
+    if (confirm(message)) {
+      try {
+        if (isInvoiced && item.invoiceId) {
+          // Find the associated invoice
+          const invoice = invoices.find(inv => inv.id === item.invoiceId);
+          if (invoice) {
+            // Filter out the matching reel from invoice items
+            let matched = false;
+            const updatedReels = invoice.reels.filter((reel: any) => {
+              if (!matched && reel.title === item.description && reel.quantity === item.quantity && reel.rate === item.rate) {
+                matched = true;
+                return false;
+              }
+              return true;
+            });
+
+            if (updatedReels.length === 0) {
+              // If no reels are left, we delete the invoice
+              await removeInvoice(invoice.id);
+            } else {
+              // Recalculate total amount and update invoice
+              const newTotal = updatedReels.reduce((sum: number, r: any) => sum + (r.quantity * r.rate), 0);
+              await addOrUpdateInvoice({
+                ...invoice,
+                reels: updatedReels,
+                totalAmount: newTotal
+              });
+            }
+          }
+        }
+        await removeItem(item.id);
+      } catch (err: any) {
+        console.error("Error deleting work log:", err);
+        alert("Failed to delete work log: " + (err?.message || String(err)));
+      }
     }
   };
 
-  if (clientsLoading || workLoading) {
+  if (clientsLoading || workLoading || invoicesLoading) {
     return <div className="p-8 flex justify-center items-center h-full"><p className="text-slate-500">Loading work logs...</p></div>;
   }
 
@@ -221,15 +260,13 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
                         )}
                       </td>
                       <td className="py-4 px-4 text-sm text-right">
-                        {work.status === 'Uninvoiced' && (
-                          <button 
-                            onClick={() => deleteWork(work.id)}
-                            className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50"
-                            title="Delete"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
+                        <button 
+                          onClick={() => deleteWork(work)}
+                          className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50"
+                          title="Delete"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </td>
                     </tr>
                   );
