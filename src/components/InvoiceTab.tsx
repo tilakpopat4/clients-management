@@ -5,6 +5,7 @@ import { Plus, Trash2, Download, Receipt, FileCheck } from 'lucide-react';
 import html2pdf from 'html2pdf.js';
 import { useFirestore } from '../hooks/useFirestore';
 import { User } from 'firebase/auth';
+import { generateUUID } from '../lib/utils';
 
 interface InvoiceTabProps {
   user: User | null;
@@ -36,14 +37,14 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
       
       if (uninvoicedWork.length > 0) {
         setReels(uninvoicedWork.map(w => ({
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           title: w.description,
           quantity: w.quantity,
           rate: w.rate
         })));
         setLinkedWorkItemIds(uninvoicedWork.map(w => w.id));
       } else {
-        setReels([{ id: crypto.randomUUID(), title: '', quantity: 1, rate: selectedClient ? selectedClient.defaultRate : 0 }]);
+        setReels([{ id: generateUUID(), title: '', quantity: 1, rate: selectedClient ? selectedClient.defaultRate : 0 }]);
         setLinkedWorkItemIds([]);
       }
     }
@@ -56,7 +57,7 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
   const addItem = (defaultTitle: string, defaultRate: number) => {
     setReels([
       ...reels,
-      { id: crypto.randomUUID(), title: defaultTitle, quantity: 1, rate: defaultRate }
+      { id: generateUUID(), title: defaultTitle, quantity: 1, rate: defaultRate }
     ]);
   };
 
@@ -102,7 +103,7 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
     html2pdf().set(opt).from(element).save().then(async () => {
       // Save invoice to cloud storage
       const newInvoice: Invoice = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         date: Date.now(),
         clientId: selectedClient.id,
         clientName: selectedClient.name,
@@ -123,7 +124,7 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
         }
         
         // Clear selection after successful generation
-        setReels([{ id: crypto.randomUUID(), title: '', quantity: 1, rate: selectedClient.defaultRate }]);
+        setReels([{ id: generateUUID(), title: '', quantity: 1, rate: selectedClient.defaultRate }]);
         setLinkedWorkItemIds([]);
       } catch (err) {
         console.error("Error saving to cloud:", err);

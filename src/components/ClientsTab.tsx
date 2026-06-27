@@ -3,6 +3,7 @@ import { Client } from '../types';
 import { Plus, Edit2, Trash2, CheckCircle2, X } from 'lucide-react';
 import { useFirestore } from '../hooks/useFirestore';
 import { User } from 'firebase/auth';
+import { generateUUID } from '../lib/utils';
 
 interface ClientsTabProps {
   user: User | null;
@@ -46,7 +47,7 @@ export default function ClientsTab({ user }: ClientsTabProps) {
         setIsEditing(null);
       } else {
         const newClient: any = { 
-          id: crypto.randomUUID(), 
+          id: generateUUID(), 
           name: formData.name,
           phone: formData.phone,
           email: formData.email,

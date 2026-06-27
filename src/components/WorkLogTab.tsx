@@ -4,6 +4,7 @@ import { useFirestore } from '../hooks/useFirestore';
 import { Client, WorkItem } from '../types';
 import clsx from 'clsx';
 import { User } from 'firebase/auth';
+import { generateUUID } from '../lib/utils';
 
 interface WorkLogTabProps {
   user: User;
@@ -28,7 +29,7 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
     
     const client = clients.find(c => c.id === formData.clientId);
     const newWork: WorkItem = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       clientId: formData.clientId,
       description: formData.description,
       quantity: Number(formData.quantity),
