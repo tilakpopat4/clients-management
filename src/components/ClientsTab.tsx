@@ -61,9 +61,9 @@ export default function ClientsTab({ user }: ClientsTabProps) {
       }
       setFormData({ name: '', phone: '', email: '', defaultRate: '', onSiteShootRate: '', websiteMakingRate: '' });
       setIsFormOpen(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Error saving client. Check console.");
+      alert("Error saving client: " + (err?.message || String(err)));
     }
   };
   

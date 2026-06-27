@@ -43,9 +43,9 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
       await addOrUpdateItem(newWork);
       setFormData({ ...formData, description: '', quantity: '1', rate: '' });
       setIsFormOpen(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Error adding work item");
+      alert("Error adding work item: " + (err?.message || String(err)));
     }
   };
 

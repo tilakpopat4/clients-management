@@ -90,6 +90,26 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
 
     setIsGenerating(true);
     const element = document.getElementById('invoice-preview-capture');
+    if (!element) {
+      alert("Error: Invoice preview element not found.");
+      setIsGenerating(false);
+      return;
+    }
+
+    // Resolve html2pdf function robustly in Vite/ESM environment
+    let html2pdfFunc = html2pdf;
+    if (html2pdfFunc && (html2pdfFunc as any).default) {
+      html2pdfFunc = (html2pdfFunc as any).default;
+    }
+    if (typeof html2pdfFunc !== 'function' && typeof window !== 'undefined' && (window as any).html2pdf) {
+      html2pdfFunc = (window as any).html2pdf;
+    }
+
+    if (typeof html2pdfFunc !== 'function') {
+      alert("Error: html2pdf library failed to load as a function. Please refresh and try again.");
+      setIsGenerating(false);
+      return;
+    }
     
     // Configure PDF options
     const opt = {
@@ -100,7 +120,7 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
       jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
     };
 
-    html2pdf().set(opt).from(element).save().then(async () => {
+    html2pdfFunc().set(opt).from(element).save().then(async () => {
       // Save invoice to cloud storage
       const newInvoice: Invoice = {
         id: generateUUID(),
@@ -126,15 +146,16 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
         // Clear selection after successful generation
         setReels([{ id: generateUUID(), title: '', quantity: 1, rate: selectedClient.defaultRate }]);
         setLinkedWorkItemIds([]);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error saving to cloud:", err);
+        alert("Error saving invoice/work items to cloud: " + (err?.message || String(err)));
       }
       setIsGenerating(false);
       
     }).catch((err: any) => {
       console.error(err);
       setIsGenerating(false);
-      alert("An error occurred while generating the PDF.");
+      alert("An error occurred while generating the PDF: " + (err?.message || String(err)));
     });
   };
 
