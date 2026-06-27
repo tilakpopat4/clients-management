@@ -205,7 +205,7 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
 
     // Install the computedStyle Proxy to convert oklch colors on the fly for html2canvas
     window.getComputedStyle = function(el, pseudoElt) {
-      const style = originalGetComputedStyle(el, pseudoElt);
+      const style = originalGetComputedStyle.call(window, el, pseudoElt);
       return new Proxy(style, {
         get(target, prop, receiver) {
           const val = Reflect.get(target, prop, receiver);
