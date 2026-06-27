@@ -197,7 +197,8 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
       filename:     `Invoice_${selectedClient.name.replace(/\s+/g, '_')}_${new Date().toLocaleDateString('en-IN').replace(/\//g, '-')}.pdf`,
       image:        { type: 'jpeg' as const, quality: 0.98 },
       html2canvas:  { scale: 2, useCORS: true, logging: false },
-      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
+      pagebreak:    { mode: ['css', 'legacy'], avoid: ['.avoid-break'] }
     };
 
     // Temporarily replace oklch colors with rgb colors inline on the original element's children.
@@ -543,7 +544,7 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
               </div>
               
               {/* Total Section */}
-              <div className="flex justify-end mb-16">
+              <div className="flex justify-end mb-16 avoid-break" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
                 <div className="w-1/2">
                   <div className="flex justify-between border-b border-slate-200 py-3 text-lg">
                     <span className="uppercase tracking-widest text-sm font-bold text-slate-500">Subtotal</span>
@@ -557,7 +558,7 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
               </div>
               
               {/* Payment Info Section */}
-              <div className="mt-auto border-t-2 border-slate-800 pt-8 flex items-start justify-between">
+              <div className="mt-auto border-t-2 border-slate-800 pt-8 flex items-start justify-between avoid-break" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
                 <div className="max-w-[60%]">
                   <h3 className="text-sm font-bold mb-4 uppercase tracking-widest text-slate-500">Payment Details</h3>
                   <div className="space-y-3 text-lg text-slate-900">
