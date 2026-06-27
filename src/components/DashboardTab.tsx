@@ -286,7 +286,12 @@ export default function DashboardTab({ user }: DashboardTabProps) {
                       {new Date(inv.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </td>
                     <td className="px-6 py-4 font-medium text-gray-900">
-                      {inv.clientName}
+                      <div>{inv.clientName}</div>
+                      {inv.discountAmount && (
+                        <div className="text-xs text-rose-500 font-normal mt-0.5">
+                          Deduction: -₹{inv.discountAmount.toLocaleString('en-IN')}{inv.discountDescription ? ` (${inv.discountDescription})` : ''}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-right font-medium text-gray-900">
                       ₹{inv.totalAmount.toLocaleString('en-IN')}

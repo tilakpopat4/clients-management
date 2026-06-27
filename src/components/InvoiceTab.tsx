@@ -7,6 +7,7 @@ import { useFirestore } from '../hooks/useFirestore';
 import { User } from 'firebase/auth';
 import { generateUUID } from '../lib/utils';
 import Logo from './Logo';
+import QRCode from 'qrcode';
 
 // Helper functions to parse and convert oklch colors to standard rgb/rgba,
 // which prevents crashes in html2canvas (used by html2pdf.js) under Tailwind CSS v4.
@@ -102,6 +103,9 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
   const [reels, setReels] = useState<Reel[]>([]);
   const [linkedWorkItemIds, setLinkedWorkItemIds] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [discountAmount, setDiscountAmount] = useState<string>('');
+  const [discountDescription, setDiscountDescription] = useState<string>('');
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
 
   const selectedClient = clients.find(c => c.id === selectedClientId);
 
@@ -157,6 +161,15 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
   };
 
   const total = calculateTotal();
+  const discount = Number(discountAmount) || 0;
+  const grandTotal = Math.max(0, total - discount);
+
+  useEffect(() => {
+    const upiUrl = `upi://pay?pa=tilakpopat2007-1@okaxis&pn=Tilak%20Popat&am=${grandTotal}`;
+    QRCode.toDataURL(upiUrl, { width: 260, margin: 1 })
+      .then(url => setQrCodeUrl(url))
+      .catch(err => console.error("Failed to generate QR Code:", err));
+  }, [grandTotal]);
 
   const handleDownload = () => {
     if (!selectedClient) {
@@ -267,8 +280,12 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
         clientId: selectedClient.id,
         clientName: selectedClient.name,
         reels: [...reels],
-        totalAmount: total,
-        status: 'Pending'
+        totalAmount: grandTotal,
+        status: 'Pending',
+        ...(discount > 0 ? {
+          discountAmount: discount,
+          discountDescription: discountDescription.trim() || 'Discount/Deduction'
+        } : {})
       };
       
       try {
@@ -285,6 +302,8 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
         // Clear selection after successful generation
         setReels([{ id: generateUUID(), title: '', quantity: 1, rate: selectedClient.defaultRate }]);
         setLinkedWorkItemIds([]);
+        setDiscountAmount('');
+        setDiscountDescription('');
       } catch (err: any) {
         console.error("Error saving to cloud:", err);
         alert("Error saving invoice/work items to cloud: " + (err?.message || String(err)));
@@ -430,9 +449,49 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
               ))}
             </div>
 
-            <div className="mt-6 pt-6 border-t border-slate-100 flex justify-between items-center">
-              <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Total Amount</span>
-              <span className="text-2xl font-bold text-slate-900">₹{total.toLocaleString('en-IN')}</span>
+            {/* Discount / Deduction Fields */}
+            <div className="mt-6 pt-6 border-t border-slate-100 space-y-4">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">Discount / Deduction (Optional)</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Deduction Description</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Early payment discount"
+                    value={discountDescription}
+                    onChange={(e) => setDiscountDescription(e.target.value)}
+                    className="w-full border border-slate-200 rounded px-3 py-2 text-sm bg-white outline-none transition-colors focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Deduction Amount (₹)</label>
+                  <input 
+                    type="number" 
+                    min="0"
+                    placeholder="e.g. 1000"
+                    value={discountAmount}
+                    onChange={(e) => setDiscountAmount(e.target.value)}
+                    className="w-full border border-slate-200 rounded px-3 py-2 text-sm bg-white outline-none transition-colors focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-slate-100 space-y-2">
+              <div className="flex justify-between items-center text-sm text-slate-500">
+                <span>Subtotal</span>
+                <span>₹{total.toLocaleString('en-IN')}</span>
+              </div>
+              {discount > 0 && (
+                <div className="flex justify-between items-center text-sm text-rose-500 font-medium">
+                  <span>Deduction ({discountDescription.trim() || 'Discount'})</span>
+                  <span>-₹{discount.toLocaleString('en-IN')}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center pt-2 border-t border-dashed border-slate-100">
+                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Grand Total</span>
+                <span className="text-2xl font-bold text-slate-900">₹{grandTotal.toLocaleString('en-IN')}</span>
+              </div>
             </div>
 
             <button 
@@ -554,9 +613,17 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
                     <span className="uppercase tracking-widest text-sm font-bold text-slate-500">Subtotal</span>
                     <span className="font-semibold text-slate-800">₹{total.toLocaleString('en-IN')}</span>
                   </div>
+                  
+                  {discount > 0 && (
+                    <div className="flex justify-between border-b border-slate-200 py-3 text-lg text-rose-600 font-medium">
+                      <span className="uppercase tracking-widest text-sm font-bold text-rose-500">Deduction {discountDescription ? `(${discountDescription})` : ''}</span>
+                      <span>-₹{discount.toLocaleString('en-IN')}</span>
+                    </div>
+                  )}
+
                   <div className="flex justify-between border-b-2 border-slate-800 py-4 text-2xl font-bold mt-1 text-slate-900">
                     <span className="uppercase tracking-widest text-lg">Total Due</span>
-                    <span>₹{total.toLocaleString('en-IN')}</span>
+                    <span>₹{grandTotal.toLocaleString('en-IN')}</span>
                   </div>
                 </div>
               </div>
@@ -575,12 +642,17 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
                   </div>
                 </div>
                 <div className="bg-white p-3 border border-slate-200 shadow-sm rounded-xl flex flex-col items-center">
-                  <img 
-                    src="https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=upi://pay?pa=tilakpopat2007-1@okaxis&pn=Tilak%20Popat" 
-                    alt="UPI QR Code" 
-                    className="w-[140px] h-[140px]"
-                    crossOrigin="anonymous"
-                  />
+                  {qrCodeUrl ? (
+                    <img 
+                      src={qrCodeUrl} 
+                      alt="UPI QR Code" 
+                      className="w-[140px] h-[140px]"
+                    />
+                  ) : (
+                    <div className="w-[140px] h-[140px] flex items-center justify-center text-slate-300 text-xs italic">
+                      Generating QR...
+                    </div>
+                  )}
                   <p className="text-center text-[10px] font-bold mt-3 text-slate-400 uppercase tracking-widest">Scan to Pay</p>
                 </div>
               </div>

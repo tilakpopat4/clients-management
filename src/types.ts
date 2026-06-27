@@ -36,4 +36,6 @@ export interface Invoice {
   reels: Reel[];
   totalAmount: number;
   status: 'Pending' | 'Paid';
+  discountAmount?: number;
+  discountDescription?: string;
 }

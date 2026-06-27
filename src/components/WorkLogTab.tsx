@@ -76,8 +76,10 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
               // If no reels are left, we delete the invoice
               await removeInvoice(invoice.id);
             } else {
-              // Recalculate total amount and update invoice
-              const newTotal = updatedReels.reduce((sum: number, r: any) => sum + (r.quantity * r.rate), 0);
+              // Recalculate total amount and update invoice, keeping any existing discount
+              const newSubtotal = updatedReels.reduce((sum: number, r: any) => sum + (r.quantity * r.rate), 0);
+              const discount = invoice.discountAmount || 0;
+              const newTotal = Math.max(0, newSubtotal - discount);
               await addOrUpdateInvoice({
                 ...invoice,
                 reels: updatedReels,
