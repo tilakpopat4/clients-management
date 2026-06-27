@@ -6,6 +6,7 @@ import html2pdf from 'html2pdf.js';
 import { useFirestore } from '../hooks/useFirestore';
 import { User } from 'firebase/auth';
 import { generateUUID } from '../lib/utils';
+import Logo from './Logo';
 
 // Helper functions to parse and convert oklch colors to standard rgb/rgba,
 // which prevents crashes in html2canvas (used by html2pdf.js) under Tailwind CSS v4.
@@ -481,8 +482,11 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
                   </h1>
                   <p className="text-lg font-medium text-slate-500 tracking-widest uppercase">Video Editing Services</p>
                 </div>
-                <div className="w-1/3 text-right">
-                  <p className="text-2xl font-bold mb-1 text-slate-900">Tilak Popat</p>
+                <div className="w-1/3 flex flex-col items-end text-right">
+                  <div className="flex items-center gap-2 mb-1 justify-end">
+                    <Logo className="w-8 h-8 rounded-lg shadow-sm" />
+                    <p className="text-2xl font-bold text-slate-900">Tilak Popat</p>
+                  </div>
                   <p className="text-lg text-slate-700 whitespace-nowrap">+91 78749 03810</p>
                 </div>
               </div>

@@ -2,6 +2,7 @@ import { LayoutDashboard, Users, FileText, LogOut, ClipboardList } from 'lucide-
 import { clsx } from 'clsx';
 import { Tab } from '../App';
 import { User } from 'firebase/auth';
+import Logo from './Logo';
 
 interface SidebarProps {
   activeTab: Tab;
@@ -21,8 +22,11 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: Sid
   return (
     <nav className="fixed md:relative bottom-0 left-0 w-full md:w-64 bg-slate-900 text-white flex md:flex-col md:h-full z-20">
       <div className="hidden md:block p-6">
-        <h1 className="text-white font-bold text-xl tracking-tight">Tilak Popat</h1>
-        <p className="text-slate-400 text-xs mt-1">Video Editor Pro</p>
+        <div className="flex items-center gap-3 mb-2">
+          <Logo className="w-8 h-8 rounded-lg shadow" />
+          <h1 className="text-white font-bold text-lg tracking-tight">Tilak Popat</h1>
+        </div>
+        <p className="text-slate-400 text-xs pl-11 -mt-2">Video Editor Pro</p>
       </div>
       
       <div className="flex-1 px-2 md:px-4 flex flex-row md:flex-col justify-around md:justify-start space-y-0 md:space-y-2 py-2 md:py-0 overflow-y-auto">

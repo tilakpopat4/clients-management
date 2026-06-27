@@ -1,0 +1,21 @@
+import React from 'react';
+
+interface LogoProps {
+  className?: string;
+}
+
+export default function Logo({ className = "w-8 h-8" }: LogoProps) {
+  return (
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      viewBox="0 0 512 512" 
+      className={`${className} rounded-lg shadow-sm`}
+    >
+      <rect width="512" height="512" rx="100" fill="#4f46e5" />
+      <path d="M120 180 h272 v200 H120 z" fill="#ffffff" />
+      <path d="M150 140 l60 -40 h150 l-30 40 z" fill="#c7d2fe" />
+      <circle cx="256" cy="280" r="40" fill="#4f46e5" />
+      <path d="M246 260 l30 20 -30 20 z" fill="#ffffff" />
+    </svg>
+  );
+}
