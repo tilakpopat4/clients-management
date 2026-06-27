@@ -280,6 +280,7 @@ export default function DashboardTab({ user }: DashboardTabProps) {
                     <td className="px-6 py-4 text-center">
                       <button
                         onClick={() => toggleInvoiceStatus(inv.id)}
+                        title="Click to toggle payment status"
                         className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer border ${
                           inv.status === 'Paid' 
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' 
@@ -290,7 +291,17 @@ export default function DashboardTab({ user }: DashboardTabProps) {
                         {inv.status}
                       </button>
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-right space-x-3">
+                      <button
+                        onClick={() => toggleInvoiceStatus(inv.id)}
+                        className={`text-xs font-semibold hover:underline ${
+                          inv.status === 'Paid' 
+                            ? 'text-amber-600 hover:text-amber-800' 
+                            : 'text-emerald-600 hover:text-emerald-800'
+                        }`}
+                      >
+                        {inv.status === 'Paid' ? 'Mark Pending' : 'Approve Payment'}
+                      </button>
                       <button
                         onClick={() => deleteInvoice(inv.id)}
                         className="text-xs text-red-500 hover:text-red-700 font-medium hover:underline"
