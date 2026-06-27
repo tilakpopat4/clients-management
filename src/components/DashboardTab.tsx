@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Invoice } from '../types';
+import { Invoice, WorkItem } from '../types';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell 
 } from 'recharts';
@@ -16,6 +16,7 @@ interface DashboardTabProps {
 export default function DashboardTab({ user }: DashboardTabProps) {
   const { data: invoices, loading, addOrUpdateItem, removeItem, batchReplaceAll } = useFirestore<Invoice>('invoices', user?.uid);
   const { batchReplaceAll: batchReplaceClients } = useFirestore<any>('clients', user?.uid);
+  const { data: workItems, addOrUpdateItem: updateWorkItem } = useFirestore<WorkItem>('workItems', user?.uid);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Calculate metrics for current month
@@ -64,7 +65,20 @@ export default function DashboardTab({ user }: DashboardTabProps) {
 
   const deleteInvoice = async (id: string) => {
     if (confirm('Are you sure you want to delete this invoice record?')) {
-      await removeItem(id);
+      try {
+        // Find all work items that have this invoiceId
+        const linkedWork = workItems.filter(w => w.invoiceId === id);
+        for (const item of linkedWork) {
+          const updatedItem = { ...item };
+          delete updatedItem.invoiceId;
+          updatedItem.status = 'Uninvoiced';
+          await updateWorkItem(updatedItem);
+        }
+        await removeItem(id);
+      } catch (err: any) {
+        console.error("Error resetting work items on invoice deletion:", err);
+        alert("Failed to reset work items: " + (err?.message || String(err)));
+      }
     }
   };
 
