@@ -7,6 +7,86 @@ import { useFirestore } from '../hooks/useFirestore';
 import { User } from 'firebase/auth';
 import { generateUUID } from '../lib/utils';
 
+// Helper functions to parse and convert oklch colors to standard rgb/rgba,
+// which prevents crashes in html2canvas (used by html2pdf.js) under Tailwind CSS v4.
+function oklchToRgb(l_val: number, c_val: number, h_val: number): { r: number, g: number, b: number } {
+  // h_val is in degrees, convert to radians
+  const h_rad = (h_val * Math.PI) / 180;
+  const a = c_val * Math.cos(h_rad);
+  const b = c_val * Math.sin(h_rad);
+
+  const l = l_val + 0.3963377774 * a + 0.2158037573 * b;
+  const m = l_val - 0.1055613458 * a - 0.0638541728 * b;
+  const s = l_val - 0.0894841775 * a - 1.2914855480 * b;
+
+  const l_3 = l * l * l;
+  const m_3 = m * m * m;
+  const s_3 = s * s * s;
+
+  let r_lin = +4.0767416621 * l_3 - 3.3077115913 * m_3 + 0.2309699292 * s_3;
+  let g_lin = -1.2684380046 * l_3 + 2.6097574011 * m_3 - 0.3413193965 * s_3;
+  let b_lin = -0.0041960863 * l_3 - 0.7034186147 * m_3 + 1.7076147010 * s_3;
+
+  const gamma = (c: number) => {
+    return c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+  };
+
+  const r_val = Math.round(Math.max(0, Math.min(1, gamma(r_lin))) * 255);
+  const g_val = Math.round(Math.max(0, Math.min(1, gamma(g_lin))) * 255);
+  const b_val = Math.round(Math.max(0, Math.min(1, gamma(b_lin))) * 255);
+
+  return { r: r_val, g: g_val, b: b_val };
+}
+
+function convertOklchStringToRgb(oklchStr: string): string {
+  const match = oklchStr.match(/oklch\(([^)]+)\)/);
+  if (!match) return oklchStr;
+
+  const partsStr = match[1].trim();
+  const parts = partsStr.split(/[\s,/]+/);
+  if (parts.length < 3) return oklchStr;
+
+  const parseVal = (str: string, base: number = 1) => {
+    if (str.endsWith('%')) {
+      return (parseFloat(str) / 100) * base;
+    }
+    return parseFloat(str);
+  };
+
+  let l_val = parseVal(parts[0], 1);
+  if (l_val > 1 && !parts[0].endsWith('%')) {
+    l_val = l_val / 100;
+  }
+
+  const c_val = parseVal(parts[1], 1);
+  const h_val = parseVal(parts[2], 1);
+
+  const alphaStr = parts[3];
+  const alpha = alphaStr !== undefined ? parseVal(alphaStr, 1) : 1;
+
+  const { r, g, b } = oklchToRgb(l_val, c_val, h_val);
+
+  if (alpha === 1) {
+    return `rgb(${r}, ${g}, ${b})`;
+  } else {
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+}
+
+function replaceOklchWithRgb(str: string): string {
+  if (typeof str !== 'string') return str;
+  if (!str.includes('oklch')) return str;
+
+  return str.replace(/oklch\(([^)]+)\)/g, (match) => {
+    try {
+      return convertOklchStringToRgb(match);
+    } catch (e) {
+      console.warn("Failed to parse/convert oklch color:", match, e);
+      return 'rgb(0, 0, 0)';
+    }
+  });
+}
+
 interface InvoiceTabProps {
   user: User | null;
 }
@@ -120,7 +200,36 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
       jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
     };
 
+    // Backup original window.getComputedStyle
+    const originalGetComputedStyle = window.getComputedStyle;
+
+    // Install the computedStyle Proxy to convert oklch colors on the fly for html2canvas
+    window.getComputedStyle = function(el, pseudoElt) {
+      const style = originalGetComputedStyle(el, pseudoElt);
+      return new Proxy(style, {
+        get(target, prop, receiver) {
+          const val = Reflect.get(target, prop, receiver);
+          if (typeof val === 'string' && val.includes('oklch')) {
+            return replaceOklchWithRgb(val);
+          }
+          if (typeof val === 'function') {
+            return function(...args: any[]) {
+              const res = val.apply(target, args);
+              if (typeof res === 'string' && res.includes('oklch')) {
+                return replaceOklchWithRgb(res);
+              }
+              return res;
+            };
+          }
+          return val;
+        }
+      });
+    };
+
     html2pdfFunc().set(opt).from(element).save().then(async () => {
+      // Restore original computed style function immediately
+      window.getComputedStyle = originalGetComputedStyle;
+
       // Save invoice to cloud storage
       const newInvoice: Invoice = {
         id: generateUUID(),
@@ -153,6 +262,9 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
       setIsGenerating(false);
       
     }).catch((err: any) => {
+      // Restore original computed style function immediately
+      window.getComputedStyle = originalGetComputedStyle;
+
       console.error(err);
       setIsGenerating(false);
       alert("An error occurred while generating the PDF: " + (err?.message || String(err)));
