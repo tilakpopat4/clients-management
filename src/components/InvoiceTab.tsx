@@ -200,35 +200,62 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
       jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
     };
 
-    // Backup original window.getComputedStyle
-    const originalGetComputedStyle = window.getComputedStyle;
+    // Clone the element and place it offscreen so we can compute styles correctly
+    const clone = element.cloneNode(true) as HTMLElement;
+    clone.id = 'invoice-preview-capture-clone';
+    clone.style.position = 'absolute';
+    clone.style.left = '-9999px';
+    clone.style.top = '0';
+    clone.style.width = element.offsetWidth + 'px';
+    document.body.appendChild(clone);
 
-    // Install the computedStyle Proxy to convert oklch colors on the fly for html2canvas
-    window.getComputedStyle = function(el, pseudoElt) {
-      const style = originalGetComputedStyle.call(window, el, pseudoElt);
-      return new Proxy(style, {
-        get(target, prop, receiver) {
-          const val = Reflect.get(target, prop, receiver);
-          if (typeof val === 'string' && val.includes('oklch')) {
-            return replaceOklchWithRgb(val);
+    const colorProperties = [
+      'color',
+      'backgroundColor',
+      'borderColor',
+      'borderTopColor',
+      'borderRightColor',
+      'borderBottomColor',
+      'borderLeftColor',
+      'outlineColor',
+      'textDecorationColor',
+      'boxShadow',
+      'fill',
+      'stroke'
+    ];
+
+    // Read computed styles of the original visible element and set them as inline RGB styles on the clone
+    try {
+      const originalElements = [element, ...Array.from(element.querySelectorAll('*'))] as HTMLElement[];
+      const clonedElements = [clone, ...Array.from(clone.querySelectorAll('*'))] as HTMLElement[];
+
+      for (let i = 0; i < originalElements.length; i++) {
+        const origEl = originalElements[i];
+        const cloneEl = clonedElements[i];
+        if (!origEl || !cloneEl) continue;
+
+        const computed = window.getComputedStyle(origEl);
+        for (const prop of colorProperties) {
+          try {
+            const val = computed[prop as any];
+            if (typeof val === 'string' && val.includes('oklch')) {
+              const converted = replaceOklchWithRgb(val);
+              cloneEl.style[prop as any] = converted;
+            }
+          } catch (e) {
+            // ignore individual style override errors
           }
-          if (typeof val === 'function') {
-            return function(...args: any[]) {
-              const res = val.apply(target, args);
-              if (typeof res === 'string' && res.includes('oklch')) {
-                return replaceOklchWithRgb(res);
-              }
-              return res;
-            };
-          }
-          return val;
         }
-      });
-    };
+      }
+    } catch (err) {
+      console.warn("Failed to preprocess oklch styles on element clone:", err);
+    }
 
-    html2pdfFunc().set(opt).from(element).save().then(async () => {
-      // Restore original computed style function immediately
-      window.getComputedStyle = originalGetComputedStyle;
+    html2pdfFunc().set(opt).from(clone).save().then(async () => {
+      // Remove clone from document body
+      if (clone.parentNode) {
+        clone.parentNode.removeChild(clone);
+      }
 
       // Save invoice to cloud storage
       const newInvoice: Invoice = {
@@ -262,8 +289,10 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
       setIsGenerating(false);
       
     }).catch((err: any) => {
-      // Restore original computed style function immediately
-      window.getComputedStyle = originalGetComputedStyle;
+      // Remove clone from document body
+      if (clone.parentNode) {
+        clone.parentNode.removeChild(clone);
+      }
 
       console.error(err);
       setIsGenerating(false);
