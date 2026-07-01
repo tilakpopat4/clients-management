@@ -55,6 +55,20 @@
           "condition": "request.auth != null && request.resource.data.userId == request.auth.uid"
         }
       ]
+    },
+    {
+      "name": "blocked_users",
+      "path": "blocked_users/{userId}",
+      "rules": [
+        {
+          "operations": ["read"],
+          "condition": "true"
+        },
+        {
+          "operations": ["create", "update", "delete"],
+          "condition": "request.auth != null"
+        }
+      ]
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, FileText, LogOut, ClipboardList, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, LogOut, ClipboardList, Settings, ShieldCheck } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Tab } from '../App';
 import { User } from 'firebase/auth';
