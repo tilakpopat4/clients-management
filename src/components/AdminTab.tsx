@@ -203,7 +203,7 @@ export default function AdminTab() {
               Unlock Console
             </button>
 
-            {window.location.pathname === '/admin' && (
+            {(window.location.pathname === '/admin' || window.location.hash === '#/admin' || window.location.hash === '#admin' || window.location.search.includes('admin=true')) && (
               <button
                 type="button"
                 onClick={() => { window.location.href = '/' }}
@@ -228,7 +228,7 @@ export default function AdminTab() {
           <p className="text-slate-500 text-sm mt-1">Manage active freelancers, view usage statistics, and configure user blocking policies.</p>
         </div>
         <div className="flex items-center gap-2">
-          {window.location.pathname === '/admin' && (
+          {(window.location.pathname === '/admin' || window.location.hash === '#/admin' || window.location.hash === '#admin' || window.location.search.includes('admin=true')) && (
             <button
               onClick={() => { window.location.href = '/' }}
               className="bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-xs font-semibold hover:bg-slate-50 transition-colors shadow"

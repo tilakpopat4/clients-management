@@ -26,15 +26,28 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [isBlocked, setIsBlocked] = useState<boolean | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [isAdminRoute, setIsAdminRoute] = useState(window.location.pathname === '/admin');
+  const checkIsAdminRoute = () => {
+    return (
+      window.location.pathname === '/admin' ||
+      window.location.hash === '#/admin' ||
+      window.location.hash === '#admin' ||
+      window.location.search.includes('admin=true')
+    );
+  };
+
+  const [isAdminRoute, setIsAdminRoute] = useState(checkIsAdminRoute());
 
   // Handle browser back/forward buttons or direct path modifications
   useEffect(() => {
     const handleLocationChange = () => {
-      setIsAdminRoute(window.location.pathname === '/admin');
+      setIsAdminRoute(checkIsAdminRoute());
     };
     window.addEventListener('popstate', handleLocationChange);
-    return () => window.removeEventListener('popstate', handleLocationChange);
+    window.addEventListener('hashchange', handleLocationChange);
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hashchange', handleLocationChange);
+    };
   }, []);
 
   // Load user profile from profiles collection in Firestore
