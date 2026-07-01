@@ -99,7 +99,17 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
   const { data: workItems, addOrUpdateItem: updateWorkItem } = useFirestore<WorkItem>('workItems', user?.uid);
   
   const [selectedClientId, setSelectedClientId] = useState<string>('');
-  const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [dateFrom, setDateFrom] = useState<string>(() => {
+    const d = new Date();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    return `${d.getFullYear()}-${month}-01`;
+  });
+  const [dateTo, setDateTo] = useState<string>(() => {
+    const d = new Date();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${month}-${day}`;
+  });
   const [reels, setReels] = useState<Reel[]>([]);
   const [linkedWorkItemIds, setLinkedWorkItemIds] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -110,14 +120,19 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
   const selectedClient = clients.find(c => c.id === selectedClientId);
 
   useEffect(() => {
-    if (selectedClientId && selectedMonth) {
-      // Find uninvoiced work items for this client in the selected month
+    if (selectedClientId && dateFrom && dateTo) {
+      // Find uninvoiced work items for this client in the selected date span
       const uninvoicedWork = workItems.filter(w => {
         if (w.clientId !== selectedClientId) return false;
         if (w.status !== 'Uninvoiced') return false;
         
-        const workMonth = new Date(w.date).toISOString().slice(0, 7);
-        return workMonth === selectedMonth;
+        const workDate = new Date(w.date);
+        const yyyy = workDate.getFullYear();
+        const mm = String(workDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(workDate.getDate()).padStart(2, '0');
+        const workDateStr = `${yyyy}-${mm}-${dd}`;
+        
+        return workDateStr >= dateFrom && workDateStr <= dateTo;
       });
       
       if (uninvoicedWork.length > 0) {
@@ -133,7 +148,7 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
         setLinkedWorkItemIds([]);
       }
     }
-  }, [selectedClientId, selectedMonth, workItems]);
+  }, [selectedClientId, dateFrom, dateTo, workItems]);
 
   const handleClientChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedClientId(e.target.value);
@@ -358,15 +373,28 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
                 )}
               </div>
               
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Select Month *</label>
-                <input 
-                  type="month"
-                  className="w-full border border-slate-200 rounded px-3 py-2 text-sm bg-slate-50 outline-none transition-colors focus:border-indigo-500"
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                />
-                <p className="text-xs text-slate-400 mt-1">Automatically loads uninvoiced work for this month.</p>
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Date From *</label>
+                    <input 
+                      type="date"
+                      className="w-full border border-slate-200 rounded px-3 py-2 text-sm bg-slate-50 outline-none transition-colors focus:border-indigo-500"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Date To *</label>
+                    <input 
+                      type="date"
+                      className="w-full border border-slate-200 rounded px-3 py-2 text-sm bg-slate-50 outline-none transition-colors focus:border-indigo-500"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400">Automatically loads uninvoiced work within this custom date span.</p>
               </div>
             </div>
           </div>
