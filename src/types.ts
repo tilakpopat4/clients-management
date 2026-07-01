@@ -39,3 +39,14 @@ export interface Invoice {
   discountAmount?: number;
   discountDescription?: string;
 }
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  phone: string;
+  upiId: string;
+  professionalTitle: string;
+  servicesDescription: string;
+  createdAt: number;
+}
+

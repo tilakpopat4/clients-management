@@ -11,6 +11,9 @@ import InvoiceTab from './components/InvoiceTab';
 import { WorkLogTab } from './components/WorkLogTab';
 import { auth, googleProvider } from './firebase';
 import { signInWithPopup, onAuthStateChanged, User, signOut } from 'firebase/auth';
+import { useFirestore } from './hooks/useFirestore';
+import { UserProfile } from './types';
+import ProfileModal from './components/ProfileModal';
 
 export type Tab = 'dashboard' | 'clients' | 'work' | 'invoice';
 
@@ -18,6 +21,11 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+
+  // Load user profile from profiles collection in Firestore
+  const { data: profiles, loading: profilesLoading, addOrUpdateItem: saveProfile } = useFirestore<UserProfile>('profiles', user?.uid);
+  const profile = profiles[0] || null;
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -26,6 +34,13 @@ export default function App() {
     });
     return () => unsubscribe();
   }, []);
+
+  // Open profile modal if the user is signed in but has not set up their profile yet
+  useEffect(() => {
+    if (user && !profilesLoading && !profile) {
+      setIsProfileModalOpen(true);
+    }
+  }, [user, profilesLoading, profile]);
 
   const handleLogin = async () => {
     try {
@@ -44,7 +59,7 @@ export default function App() {
     }
   };
 
-  if (loading) {
+  if (loading || (user && profilesLoading)) {
     return (
       <div className="flex items-center justify-center h-screen w-full bg-slate-50">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
@@ -74,13 +89,29 @@ export default function App() {
 
   return (
     <div className="flex flex-col md:flex-row h-screen w-full bg-slate-50 text-slate-900 overflow-hidden font-sans">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} user={user} onLogout={handleLogout} />
+      <Sidebar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        user={user} 
+        onLogout={handleLogout} 
+        profile={profile}
+        onEditProfile={() => setIsProfileModalOpen(true)}
+      />
       <main className="flex-1 overflow-y-auto relative pb-20 md:pb-0">
         {activeTab === 'dashboard' && <DashboardTab user={user} />}
         {activeTab === 'clients' && <ClientsTab user={user} />}
         {activeTab === 'work' && <WorkLogTab user={user} />}
-        {activeTab === 'invoice' && <InvoiceTab user={user} />}
+        {activeTab === 'invoice' && <InvoiceTab user={user} profile={profile} />}
       </main>
+
+      <ProfileModal 
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        user={user}
+        initialProfile={profile}
+        onSave={saveProfile}
+        isMandatory={!profile}
+      />
     </div>
   );
 }

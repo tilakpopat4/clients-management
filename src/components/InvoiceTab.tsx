@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Client, Reel, Invoice, WorkItem } from '../types';
+import { Client, Reel, Invoice, WorkItem, UserProfile } from '../types';
 import { Plus, Trash2, Download, Receipt, FileCheck } from 'lucide-react';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
@@ -91,9 +91,10 @@ function replaceOklchWithRgb(str: string): string {
 
 interface InvoiceTabProps {
   user: User | null;
+  profile: UserProfile | null;
 }
 
-export default function InvoiceTab({ user }: InvoiceTabProps) {
+export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
   const { data: clients, loading: clientsLoading } = useFirestore<Client>('clients', user?.uid);
   const { data: invoices, addOrUpdateItem: addInvoice } = useFirestore<Invoice>('invoices', user?.uid);
   const { data: workItems, addOrUpdateItem: updateWorkItem } = useFirestore<WorkItem>('workItems', user?.uid);
@@ -180,11 +181,13 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
   const grandTotal = Math.max(0, total - discount);
 
   useEffect(() => {
-    const upiUrl = `upi://pay?pa=tilakpopat2007-1@okaxis&pn=Tilak%20Popat&am=${grandTotal}`;
+    const payeeName = encodeURIComponent(profile?.name || user?.displayName || 'Tilak Popat');
+    const upiId = profile?.upiId || 'tilakpopat2007-1@okaxis';
+    const upiUrl = `upi://pay?pa=${upiId}&pn=${payeeName}&am=${grandTotal}`;
     QRCode.toDataURL(upiUrl, { width: 260, margin: 1 })
       .then(url => setQrCodeUrl(url))
       .catch(err => console.error("Failed to generate QR Code:", err));
-  }, [grandTotal]);
+  }, [grandTotal, user, profile]);
 
   const handleDownload = () => {
     if (!selectedClient) {
@@ -567,14 +570,14 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
                   <h1 className="text-5xl font-extrabold uppercase tracking-widest mb-3 text-slate-900">
                     INVOICE
                   </h1>
-                  <p className="text-lg font-medium text-slate-500 tracking-widest uppercase">Video Editing Services</p>
+                  <p className="text-lg font-medium text-slate-500 tracking-widest uppercase">{profile?.servicesDescription || 'Video Editing Services'}</p>
                 </div>
                 <div className="w-1/3 flex flex-col items-end text-right">
                   <div className="flex items-center gap-2 mb-1 justify-end">
                     <Logo className="w-8 h-8 rounded-lg shadow-sm" />
-                    <p className="text-2xl font-bold text-slate-900">Tilak Popat</p>
+                    <p className="text-2xl font-bold text-slate-900">{profile?.name || user?.displayName || 'Tilak Popat'}</p>
                   </div>
-                  <p className="text-lg text-slate-700 whitespace-nowrap">+91 78749 03810</p>
+                  <p className="text-lg text-slate-700 whitespace-nowrap">{profile?.phone || '+91 78749 03810'}</p>
                 </div>
               </div>
               
@@ -662,8 +665,8 @@ export default function InvoiceTab({ user }: InvoiceTabProps) {
                   <h3 className="text-sm font-bold mb-4 uppercase tracking-widest text-slate-500">Payment Details</h3>
                   <div className="space-y-3 text-lg text-slate-900">
                     <p className="flex items-center gap-3"><span className="font-bold w-24 text-slate-600">Method</span> UPI Transfer</p>
-                    <p className="flex items-center gap-3"><span className="font-bold w-24 text-slate-600">UPI ID</span> <span className="font-mono bg-slate-100 px-2 py-1 rounded text-base">tilakpopat2007-1@okaxis</span></p>
-                    <p className="flex items-center gap-3"><span className="font-bold w-24 text-slate-600">Name</span> Tilak Popat</p>
+                    <p className="flex items-center gap-3"><span className="font-bold w-24 text-slate-600">UPI ID</span> <span className="font-mono bg-slate-100 px-2 py-1 rounded text-base">{profile?.upiId || 'tilakpopat2007-1@okaxis'}</span></p>
+                    <p className="flex items-center gap-3"><span className="font-bold w-24 text-slate-600">Name</span> {profile?.name || user?.displayName || 'Tilak Popat'}</p>
                   </div>
                   <div className="mt-8 text-sm italic text-slate-500 leading-relaxed max-w-md">
                     Thank you for your business! Please process the payment within 7 days of receiving this invoice.

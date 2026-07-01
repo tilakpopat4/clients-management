@@ -1,17 +1,20 @@
-import { LayoutDashboard, Users, FileText, LogOut, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, LogOut, ClipboardList, Settings } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Tab } from '../App';
 import { User } from 'firebase/auth';
 import Logo from './Logo';
+import { UserProfile } from '../types';
 
 interface SidebarProps {
   activeTab: Tab;
   setActiveTab: (tab: Tab) => void;
   user?: User;
   onLogout?: () => void;
+  profile?: UserProfile | null;
+  onEditProfile?: () => void;
 }
 
-export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: SidebarProps) {
+export default function Sidebar({ activeTab, setActiveTab, user, onLogout, profile, onEditProfile }: SidebarProps) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'clients', label: 'Clients', icon: Users },
@@ -24,9 +27,9 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: Sid
       <div className="hidden md:block p-6">
         <div className="flex items-center gap-3 mb-2">
           <Logo className="w-8 h-8 rounded-lg shadow" />
-          <h1 className="text-white font-bold text-lg tracking-tight">Tilak Popat</h1>
+          <h1 className="text-white font-bold text-lg tracking-tight truncate">{profile?.name || user?.displayName || 'Tilak Popat'}</h1>
         </div>
-        <p className="text-slate-400 text-xs pl-11 -mt-2">Video Editor Pro</p>
+        <p className="text-slate-400 text-xs pl-11 -mt-2 truncate">{profile?.professionalTitle || 'Video Editor Pro'}</p>
       </div>
       
       <div className="flex-1 px-2 md:px-4 flex flex-row md:flex-col justify-around md:justify-start space-y-0 md:space-y-2 py-2 md:py-0 overflow-y-auto">
@@ -57,12 +60,20 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: Sid
             <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full" />
           ) : (
             <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-medium">
-              {user?.displayName?.charAt(0) || 'U'}
+              {(profile?.name || user?.displayName)?.charAt(0) || 'U'}
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">{user?.displayName || 'User Account'}</p>
-            <p className="text-xs text-emerald-400">Cloud Sync Active</p>
+            <p className="text-sm font-medium text-white truncate">{profile?.name || user?.displayName || 'User Account'}</p>
+            {onEditProfile && (
+              <button 
+                onClick={onEditProfile}
+                className="text-[10px] text-slate-400 hover:text-indigo-400 flex items-center gap-1 transition-colors outline-none mt-0.5"
+              >
+                <Settings size={10} />
+                Edit Profile
+              </button>
+            )}
           </div>
         </div>
         
