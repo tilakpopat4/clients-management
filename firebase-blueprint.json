@@ -1,88 +1,93 @@
 {
-  "collections": [
-    {
-      "name": "clients",
-      "path": "clients/{clientId}",
-      "rules": [
-        {
-          "operations": ["read", "update", "delete"],
-          "condition": "request.auth != null && request.auth.uid == resource.data.userId"
-        },
-        {
-          "operations": ["create"],
-          "condition": "request.auth != null && request.resource.data.userId == request.auth.uid"
-        }
-      ]
+  "entities": {
+    "Client": {
+      "title": "Client",
+      "description": "Client details managed by video editor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string", "maxLength": 200 },
+        "company": { "type": "string", "maxLength": 200 },
+        "email": { "type": "string", "maxLength": 200 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "currency": { "type": "string", "maxLength": 10 },
+        "rate": { "type": "number" },
+        "status": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "userId", "name"]
     },
-    {
-      "name": "invoices",
-      "path": "invoices/{invoiceId}",
-      "rules": [
-        {
-          "operations": ["read", "update", "delete"],
-          "condition": "request.auth != null && request.auth.uid == resource.data.userId"
-        },
-        {
-          "operations": ["create"],
-          "condition": "request.auth != null && request.resource.data.userId == request.auth.uid"
-        }
-      ]
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Invoice generated for clients",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "invoiceNumber": { "type": "string", "maxLength": 100 },
+        "clientName": { "type": "string", "maxLength": 200 },
+        "totalAmount": { "type": "number" },
+        "status": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "userId", "clientName", "totalAmount"]
     },
-    {
-      "name": "workItems",
-      "path": "workItems/{workItemId}",
-      "rules": [
-        {
-          "operations": ["read", "update", "delete"],
-          "condition": "request.auth != null && request.auth.uid == resource.data.userId"
-        },
-        {
-          "operations": ["create"],
-          "condition": "request.auth != null && request.resource.data.userId == request.auth.uid"
-        }
-      ]
+    "WorkItem": {
+      "title": "WorkItem",
+      "description": "Video project or work log item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string", "maxLength": 300 },
+        "status": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "userId", "title"]
     },
-    {
-      "name": "profiles",
-      "path": "profiles/{profileId}",
-      "rules": [
-        {
-          "operations": ["read", "update", "delete"],
-          "condition": "request.auth != null && request.auth.uid == resource.data.userId"
-        },
-        {
-          "operations": ["create"],
-          "condition": "request.auth != null && request.resource.data.userId == request.auth.uid"
-        }
-      ]
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Editor profile details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string", "maxLength": 200 },
+        "email": { "type": "string", "maxLength": 200 }
+      },
+      "required": ["id", "userId"]
     },
-    {
-      "name": "notes",
-      "path": "notes/{noteId}",
-      "rules": [
-        {
-          "operations": ["read", "update", "delete"],
-          "condition": "request.auth != null && request.auth.uid == resource.data.userId"
-        },
-        {
-          "operations": ["create"],
-          "condition": "request.auth != null && request.resource.data.userId == request.auth.uid"
-        }
-      ]
-    },
-    {
-      "name": "blocked_users",
-      "path": "blocked_users/{userId}",
-      "rules": [
-        {
-          "operations": ["read"],
-          "condition": "true"
-        },
-        {
-          "operations": ["create", "update", "delete"],
-          "condition": "request.auth != null"
-        }
-      ]
+    "Note": {
+      "title": "Note",
+      "description": "Sticky notes or memo items",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string", "maxLength": 300 },
+        "content": { "type": "string", "maxLength": 5000 }
+      },
+      "required": ["id", "userId"]
     }
-  ]
+  },
+  "firestore": {
+    "clients/{clientId}": {
+      "schema": { "$ref": "#/entities/Client" },
+      "description": "Client records owned by user"
+    },
+    "invoices/{invoiceId}": {
+      "schema": { "$ref": "#/entities/Invoice" },
+      "description": "Invoices owned by user"
+    },
+    "workItems/{workItemId}": {
+      "schema": { "$ref": "#/entities/WorkItem" },
+      "description": "Work items owned by user"
+    },
+    "profiles/{profileId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profiles"
+    },
+    "notes/{noteId}": {
+      "schema": { "$ref": "#/entities/Note" },
+      "description": "Notes owned by user"
+    }
+  }
 }

@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -15,3 +15,15 @@ export const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, "ai-studio-freelancevideoed-719c6223-ef27-451a-b661-b552901cdc1f");
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+
+export async function testFirestoreConnection() {
+  try {
+    await getDocFromServer(doc(db, '_connection_test', 'ping'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.warn("Firestore offline warning: Please check your connection or Firebase setup.");
+    }
+  }
+}
+
+testFirestoreConnection();

@@ -231,73 +231,7 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
         </div>
       )}
 
-      {/* Active Payment Reminders Section (if any required) */}
-      <div className="bg-slate-900 text-slate-100 rounded-2xl p-5 shadow-sm border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div className="p-2.5 bg-indigo-500/20 text-indigo-400 rounded-xl shrink-0">
-            <Bell size={20} />
-          </div>
-          <div className="space-y-1">
-            <h4 className="text-sm font-bold text-white flex items-center gap-2">
-              Deadline & Overdue Payment Notification Behavior
-              <span className="text-[10px] font-semibold px-2 py-0.5 bg-indigo-500/30 text-indigo-300 rounded-full border border-indigo-500/30">
-                Cloud Synced
-              </span>
-            </h4>
-            <p className="text-xs text-slate-300 leading-relaxed max-w-3xl">
-              <strong>• When the App is Open:</strong> Live system banners, WhatsApp alerts, and browser popups highlight any client payment due within 3 days or overdue.<br />
-              <strong>• When the App is Closed:</strong> Since all client payment cycles, due dates, and <span className="text-indigo-300 font-semibold">Email Reminders</span> settings are stored in <strong>Firebase Firestore</strong>, cloud background tasks continuously track deadlines and draft email reminders even when the app browser tab is closed.
-            </p>
-          </div>
-        </div>
 
-        <button
-          onClick={() => {
-            // Trigger in-app floating Toast Notification instantly
-            setToastAlert({
-              title: '🚨 Test Payment Deadline Alert',
-              body: 'Client: Sample Client • Payment Due Date Approaching (₹15,000 pending). Notification test successful!',
-              type: 'success'
-            });
-
-            setTimeout(() => {
-              setToastAlert(null);
-            }, 6000);
-
-            // Attempt Native Browser Web Notification
-            try {
-              if ('Notification' in window) {
-                if (Notification.permission === 'granted') {
-                  new Notification('🚨 Deadline Alert Test', {
-                    body: 'Payment deadline tracking active! You will receive alerts when payments are due.',
-                    icon: '/favicon.ico'
-                  });
-                } else if (Notification.permission !== 'denied') {
-                  Notification.requestPermission().then(permission => {
-                    if (permission === 'granted') {
-                      new Notification('🚨 Deadline Alert Test', {
-                        body: 'Payment deadline tracking active!',
-                        icon: '/favicon.ico'
-                      });
-                    } else {
-                      alert('Browser notification permission was denied or restricted in preview mode. In-app toast banner shown above!');
-                    }
-                  });
-                } else {
-                  alert('Browser notification permissions are currently blocked in browser settings. Look at the top-right in-app alert banner!');
-                }
-              } else {
-                alert('Web Notifications API not supported in this browser mode. Look at the top-right in-app alert banner!');
-              }
-            } catch (err) {
-              console.warn("Native Notification blocked in iFrame preview:", err);
-            }
-          }}
-          className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shrink-0 transition-colors shadow-xs cursor-pointer"
-        >
-          Enable / Test Desktop Alerts
-        </button>
-      </div>
 
       {activeNotifications.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 shadow-sm space-y-4">
