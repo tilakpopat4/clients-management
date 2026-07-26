@@ -1,6 +1,6 @@
 {
-  "name": "Freelancing Client Manager",
-  "short_name": "Client Manager",
+  "name": "CrestFlow | Freelancing Client Manager",
+  "short_name": "CrestFlow",
   "description": "A dashboard for freelance video editors to manage clients and invoices.",
   "start_url": "/",
   "display": "standalone",

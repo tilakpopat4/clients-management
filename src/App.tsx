@@ -16,6 +16,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { useFirestore } from './hooks/useFirestore';
 import { UserProfile } from './types';
 import ProfileModal from './components/ProfileModal';
+import Logo from './components/Logo';
 import { ShieldAlert, LogOut } from 'lucide-react';
 
 export type Tab = 'dashboard' | 'clients' | 'work' | 'invoice' | 'admin';
@@ -158,13 +159,17 @@ export default function App() {
     return (
       <div className="flex items-center justify-center h-screen w-full bg-slate-50">
         <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 text-center max-w-md w-full font-sans">
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">
+          <div className="flex items-center justify-center gap-2.5 mb-4">
+            <Logo className="w-10 h-10 shadow-xs" />
+            <span className="text-xl font-bold text-slate-900 tracking-tight">CrestFlow</span>
+          </div>
+          <h1 className="text-xl font-bold text-slate-800 mb-1">
             {isAdminRoute ? 'Admin Portal' : 'Welcome Back'}
           </h1>
           <p className="text-slate-500 mb-6 text-sm">
             {isAdminRoute 
               ? 'Please sign in with Google to authenticate and load the Admin database console.' 
-              : 'Please sign in to access your Studio Dashboard and sync your data securely via cloud.'}
+              : 'Sign in to access your CrestFlow Freelancing Dashboard and cloud sync.'}
           </p>
           <button 
             onClick={handleLogin}

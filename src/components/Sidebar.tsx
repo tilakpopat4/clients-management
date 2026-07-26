@@ -24,12 +24,18 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, profi
 
   return (
     <nav className="fixed md:relative bottom-0 left-0 w-full md:w-64 bg-slate-900 text-white flex md:flex-col md:h-full z-20">
-      <div className="hidden md:block p-6">
-        <div className="flex items-center gap-3 mb-2">
-          <Logo className="w-8 h-8 rounded-lg shadow" />
-          <h1 className="text-white font-bold text-lg tracking-tight truncate">{profile?.name || user?.displayName || 'Tilak Popat'}</h1>
+      <div className="hidden md:block p-6 border-b border-slate-800/80 mb-2">
+        <div className="flex items-center gap-3 mb-3">
+          <Logo className="w-8 h-8 rounded-xl shadow-xs" />
+          <div className="flex flex-col">
+            <h1 className="text-white font-extrabold text-lg tracking-tight leading-none">CrestFlow</h1>
+            <span className="text-[10px] text-indigo-400 font-semibold uppercase tracking-wider mt-0.5">Client Manager</span>
+          </div>
         </div>
-        <p className="text-slate-400 text-xs pl-11 -mt-2 truncate">{profile?.professionalTitle || 'Video Editor Pro'}</p>
+        <div className="pt-2.5 border-t border-slate-800/60">
+          <p className="text-xs font-semibold text-slate-200 truncate">{profile?.name || user?.displayName || 'Tilak Popat'}</p>
+          <p className="text-[11px] text-slate-400 truncate">{profile?.professionalTitle || 'Video Editor Pro'}</p>
+        </div>
       </div>
       
       <div className="flex-1 px-2 md:px-4 flex flex-row md:flex-col justify-around md:justify-start space-y-0 md:space-y-2 py-2 md:py-0 overflow-y-auto">
