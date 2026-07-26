@@ -30,9 +30,9 @@ export default function ProfileModal({
 
   useEffect(() => {
     if (isOpen) {
-      setName(initialProfile?.name || user.displayName || '');
-      setPhone(initialProfile?.phone || '');
-      setUpiId(initialProfile?.upiId || '');
+      setName(initialProfile?.name || user.displayName || 'Tilak Popat');
+      setPhone(initialProfile?.phone || '+91 78749 03810');
+      setUpiId(initialProfile?.upiId || 'tilakpopat2007-1@okaxis');
       setProfessionalTitle(initialProfile?.professionalTitle || 'Video Editor Pro');
       setServicesDescription(initialProfile?.servicesDescription || 'Video Editing Services');
       setError('');
@@ -90,21 +90,21 @@ export default function ProfileModal({
               {isMandatory ? 'Set Up Your Freelancer Profile' : 'Profile Settings'}
             </h2>
           </div>
-          {!isMandatory && (
-            <button 
-              onClick={onClose}
-              className="text-slate-400 hover:text-white transition-colors p-1 rounded-full hover:bg-slate-800"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          )}
+          <button 
+            type="button"
+            onClick={onClose}
+            className="text-slate-400 hover:text-white transition-colors p-1 rounded-full hover:bg-slate-800 cursor-pointer"
+            title="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Content Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {isMandatory && (
             <div className="bg-indigo-50 border border-indigo-100 text-indigo-800 p-3.5 rounded-lg text-xs leading-relaxed mb-2">
-              Welcome! To generate personalized invoices and create payment links, please configure your business details.
+              Welcome! Configure your name, phone number, and UPI ID for invoices and payment links.
             </div>
           )}
 
@@ -176,20 +176,18 @@ export default function ProfileModal({
           </div>
 
           <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
-            {!isMandatory && (
-              <button 
-                type="button"
-                onClick={onClose}
-                disabled={isSaving}
-                className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-            )}
+            <button 
+              type="button"
+              onClick={onClose}
+              disabled={isSaving}
+              className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              Cancel
+            </button>
             <button 
               type="submit"
               disabled={isSaving}
-              className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow active:scale-95 disabled:opacity-50"
+              className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow active:scale-95 disabled:opacity-50 cursor-pointer"
             >
               <Save className="w-4 h-4" />
               {isSaving ? 'Saving...' : 'Save Profile'}

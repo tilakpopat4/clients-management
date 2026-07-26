@@ -52,8 +52,73 @@ export default function App() {
   }, []);
 
   // Load user profile from profiles collection in Firestore
-  const { data: profiles, loading: profilesLoading, addOrUpdateItem: saveProfile } = useFirestore<UserProfile>('profiles', user?.uid);
-  const profile = profiles[0] || null;
+  const { data: profiles, loading: profilesLoading, addOrUpdateItem: firestoreSaveProfile } = useFirestore<UserProfile>('profiles', user?.uid);
+  
+  const [cachedProfile, setCachedProfile] = useState<UserProfile | null>(() => {
+    if (user?.uid) {
+      try {
+        const saved = localStorage.getItem(`crestflow_profile_${user.uid}`);
+        return saved ? JSON.parse(saved) : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  // Sync profile cache whenever user or Firestore profile changes
+  useEffect(() => {
+    if (!user) {
+      setCachedProfile(null);
+      return;
+    }
+    try {
+      const saved = localStorage.getItem(`crestflow_profile_${user.uid}`);
+      if (saved) {
+        setCachedProfile(JSON.parse(saved));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user && profiles.length > 0) {
+      const firestoreProf = profiles[0];
+      setCachedProfile(firestoreProf);
+      try {
+        localStorage.setItem(`crestflow_profile_${user.uid}`, JSON.stringify(firestoreProf));
+        localStorage.setItem(`crestflow_profile_completed_${user.uid}`, 'true');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  }, [user, profiles]);
+
+  const profile = profiles[0] || cachedProfile;
+
+  const handleSaveProfile = async (updatedProfile: UserProfile) => {
+    if (!user) return;
+    setCachedProfile(updatedProfile);
+    try {
+      localStorage.setItem(`crestflow_profile_${user.uid}`, JSON.stringify(updatedProfile));
+      localStorage.setItem(`crestflow_profile_completed_${user.uid}`, 'true');
+    } catch (err) {
+      console.error(err);
+    }
+    await firestoreSaveProfile(updatedProfile);
+  };
+
+  const handleCloseProfileModal = () => {
+    if (user) {
+      try {
+        localStorage.setItem(`crestflow_profile_dismissed_${user.uid}`, 'true');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    setIsProfileModalOpen(false);
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -84,10 +149,14 @@ export default function App() {
     return () => unsubscribe();
   }, [user]);
 
-  // Open profile modal if the user is signed in but has not set up their profile yet, and is NOT blocked
+  // Open profile modal ONLY IF user is signed in, profile is empty, and user hasn't completed or dismissed it on this device
   useEffect(() => {
-    if (user && !profilesLoading && !profile && isBlocked === false) {
-      setIsProfileModalOpen(true);
+    if (user && !profilesLoading && isBlocked === false) {
+      const isCompleted = localStorage.getItem(`crestflow_profile_completed_${user.uid}`) === 'true';
+      const isDismissed = localStorage.getItem(`crestflow_profile_dismissed_${user.uid}`) === 'true';
+      if (!profile && !isCompleted && !isDismissed) {
+        setIsProfileModalOpen(true);
+      }
     }
   }, [user, profilesLoading, profile, isBlocked]);
 
@@ -215,14 +284,16 @@ export default function App() {
         {activeTab === 'admin' && <AdminTab />}
       </main>
 
-      <ProfileModal 
-        isOpen={isProfileModalOpen}
-        onClose={() => setIsProfileModalOpen(false)}
-        user={user}
-        initialProfile={profile}
-        onSave={saveProfile}
-        isMandatory={!profile}
-      />
+      {user && (
+        <ProfileModal 
+          isOpen={isProfileModalOpen}
+          onClose={handleCloseProfileModal}
+          user={user}
+          initialProfile={profile}
+          onSave={handleSaveProfile}
+          isMandatory={!profile && !localStorage.getItem(`crestflow_profile_completed_${user.uid}`)}
+        />
+      )}
     </div>
   );
 }
