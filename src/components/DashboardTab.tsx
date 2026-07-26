@@ -28,6 +28,7 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
   const { batchReplaceAll: batchReplaceClients } = useFirestore<any>('clients', user?.uid);
   const { data: workItems, addOrUpdateItem: updateWorkItem } = useFirestore<WorkItem>('workItems', user?.uid);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [toastAlert, setToastAlert] = useState<{ title: string; body: string; type: 'success' | 'warning' } | null>(null);
 
   // Client statuses & notifications
   const clientStatuses = useMemo(() => {
@@ -211,6 +212,25 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
         </div>
       </div>
 
+      {/* Toast Notification Floating Banner */}
+      {toastAlert && (
+        <div className="fixed top-5 right-5 z-50 max-w-sm w-full bg-slate-900 text-white rounded-2xl p-4 shadow-2xl border border-indigo-500/50 animate-in fade-in slide-in-from-top-4 flex items-start gap-3">
+          <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl shrink-0 mt-0.5">
+            <Bell size={18} className="animate-bounce" />
+          </div>
+          <div className="flex-1 space-y-0.5">
+            <h5 className="text-xs font-bold text-indigo-300 uppercase tracking-wider">{toastAlert.title}</h5>
+            <p className="text-xs text-slate-200 leading-relaxed">{toastAlert.body}</p>
+          </div>
+          <button
+            onClick={() => setToastAlert(null)}
+            className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Active Payment Reminders Section (if any required) */}
       <div className="bg-slate-900 text-slate-100 rounded-2xl p-5 shadow-sm border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-start gap-3">
@@ -233,22 +253,47 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
 
         <button
           onClick={() => {
-            if ('Notification' in window) {
-              Notification.requestPermission().then(permission => {
-                if (permission === 'granted') {
-                  new Notification('Deadline Tracking Active', {
-                    body: 'Browser desktop notifications are enabled for upcoming and overdue payment deadlines!',
+            // Trigger in-app floating Toast Notification instantly
+            setToastAlert({
+              title: '🚨 Test Payment Deadline Alert',
+              body: 'Client: Sample Client • Payment Due Date Approaching (₹15,000 pending). Notification test successful!',
+              type: 'success'
+            });
+
+            setTimeout(() => {
+              setToastAlert(null);
+            }, 6000);
+
+            // Attempt Native Browser Web Notification
+            try {
+              if ('Notification' in window) {
+                if (Notification.permission === 'granted') {
+                  new Notification('🚨 Deadline Alert Test', {
+                    body: 'Payment deadline tracking active! You will receive alerts when payments are due.',
                     icon: '/favicon.ico'
                   });
+                } else if (Notification.permission !== 'denied') {
+                  Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                      new Notification('🚨 Deadline Alert Test', {
+                        body: 'Payment deadline tracking active!',
+                        icon: '/favicon.ico'
+                      });
+                    } else {
+                      alert('Browser notification permission was denied or restricted in preview mode. In-app toast banner shown above!');
+                    }
+                  });
                 } else {
-                  alert('Browser notification permission: ' + permission);
+                  alert('Browser notification permissions are currently blocked in browser settings. Look at the top-right in-app alert banner!');
                 }
-              });
-            } else {
-              alert('Standard browser notifications enabled.');
+              } else {
+                alert('Web Notifications API not supported in this browser mode. Look at the top-right in-app alert banner!');
+              }
+            } catch (err) {
+              console.warn("Native Notification blocked in iFrame preview:", err);
             }
           }}
-          className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shrink-0 transition-colors shadow-xs"
+          className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shrink-0 transition-colors shadow-xs cursor-pointer"
         >
           Enable / Test Desktop Alerts
         </button>
