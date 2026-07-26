@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, CheckCircle, Clock } from 'lucide-react';
+import { Plus, Trash2, CheckCircle, Clock, Edit2 } from 'lucide-react';
 import { useFirestore } from '../hooks/useFirestore';
 import { Client, WorkItem } from '../types';
 import clsx from 'clsx';
@@ -16,6 +16,7 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
   const { data: invoices, loading: invoicesLoading, addOrUpdateItem: addOrUpdateInvoice, removeItem: removeInvoice } = useFirestore<any>('invoices', user.uid);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingWorkId, setEditingWorkId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     clientId: '',
     description: '',
@@ -24,29 +25,103 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
     date: new Date().toISOString().split('T')[0]
   });
 
+  const handleEditWork = (work: WorkItem) => {
+    setEditingWorkId(work.id);
+    setFormData({
+      clientId: work.clientId,
+      description: work.description,
+      quantity: String(work.quantity),
+      rate: String(work.rate),
+      date: new Date(work.date).toISOString().split('T')[0]
+    });
+    setIsFormOpen(true);
+  };
+
+  const handleCancel = () => {
+    setEditingWorkId(null);
+    setFormData({
+      clientId: '',
+      description: '',
+      quantity: '1',
+      rate: '',
+      date: new Date().toISOString().split('T')[0]
+    });
+    setIsFormOpen(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.clientId) return alert("Please select a client");
     
     const client = clients.find(c => c.id === formData.clientId);
-    const newWork: WorkItem = {
-      id: generateUUID(),
-      clientId: formData.clientId,
-      description: formData.description,
-      quantity: Number(formData.quantity),
-      rate: Number(formData.rate) || (client ? client.defaultRate : 0),
-      date: new Date(formData.date).getTime(),
-      status: 'Uninvoiced',
-      createdAt: Date.now()
-    };
+    const selectedRate = Number(formData.rate) || (client ? client.defaultRate : 0);
+    const selectedDate = new Date(formData.date).getTime();
+    const selectedQty = Number(formData.quantity);
 
     try {
-      await addOrUpdateItem(newWork);
-      setFormData({ ...formData, description: '', quantity: '1', rate: '' });
-      setIsFormOpen(false);
+      if (editingWorkId) {
+        const existing = workItems.find(w => w.id === editingWorkId);
+        if (existing) {
+          const updatedWork: WorkItem = {
+            ...existing,
+            clientId: formData.clientId,
+            description: formData.description,
+            quantity: selectedQty,
+            rate: selectedRate,
+            date: selectedDate
+          };
+
+          // If item is invoiced, update the corresponding invoice reel details as well
+          if (existing.status === 'Invoiced' && existing.invoiceId) {
+            const invoice = invoices.find(inv => inv.id === existing.invoiceId);
+            if (invoice && invoice.reels) {
+              let replaced = false;
+              const updatedReels = invoice.reels.map((reel: any) => {
+                if (!replaced && reel.title === existing.description && reel.quantity === existing.quantity && reel.rate === existing.rate) {
+                  replaced = true;
+                  return {
+                    ...reel,
+                    title: formData.description,
+                    quantity: selectedQty,
+                    rate: selectedRate
+                  };
+                }
+                return reel;
+              });
+
+              const newSubtotal = updatedReels.reduce((sum: number, r: any) => sum + (r.quantity * r.rate), 0);
+              const discount = invoice.discountAmount || 0;
+              const newTotal = Math.max(0, newSubtotal - discount);
+
+              await addOrUpdateInvoice({
+                ...invoice,
+                reels: updatedReels,
+                totalAmount: newTotal
+              });
+            }
+          }
+
+          await addOrUpdateItem(updatedWork);
+        }
+      } else {
+        const newWork: WorkItem = {
+          id: generateUUID(),
+          clientId: formData.clientId,
+          description: formData.description,
+          quantity: selectedQty,
+          rate: selectedRate,
+          date: selectedDate,
+          status: 'Uninvoiced',
+          createdAt: Date.now()
+        };
+
+        await addOrUpdateItem(newWork);
+      }
+
+      handleCancel();
     } catch (err: any) {
       console.error(err);
-      alert("Error adding work item: " + (err?.message || String(err)));
+      alert("Error saving work item: " + (err?.message || String(err)));
     }
   };
 
@@ -123,8 +198,8 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
       {isFormOpen && (
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-8">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-bold text-slate-900">Log Completed Work</h3>
-            <button onClick={() => setIsFormOpen(false)} className="text-slate-400 hover:text-slate-600">×</button>
+            <h3 className="text-lg font-bold text-slate-900">{editingWorkId ? 'Edit Work Log Entry' : 'Log Completed Work'}</h3>
+            <button onClick={handleCancel} className="text-slate-400 hover:text-slate-600">×</button>
           </div>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -197,7 +272,7 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
             <div className="flex justify-end pt-4 border-t border-slate-100">
               <button 
                 type="button" 
-                onClick={() => setIsFormOpen(false)}
+                onClick={handleCancel}
                 className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded font-medium mr-2"
               >
                 Cancel
@@ -206,7 +281,7 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
                 type="submit" 
                 className="px-4 py-2 bg-indigo-600 text-white rounded font-medium hover:bg-indigo-700"
               >
-                Log Work
+                {editingWorkId ? 'Save Changes' : 'Log Work'}
               </button>
             </div>
           </form>
@@ -261,11 +336,18 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
                           </span>
                         )}
                       </td>
-                      <td className="py-4 px-4 text-sm text-right">
+                      <td className="py-4 px-4 text-sm text-right flex justify-end items-center gap-1">
+                        <button 
+                          onClick={() => handleEditWork(work)}
+                          className="text-slate-500 hover:text-indigo-600 p-1.5 rounded hover:bg-slate-100 transition-colors"
+                          title="Edit Work Log"
+                        >
+                          <Edit2 size={16} />
+                        </button>
                         <button 
                           onClick={() => deleteWork(work)}
-                          className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50"
-                          title="Delete"
+                          className="text-red-500 hover:text-red-700 p-1.5 rounded hover:bg-red-50 transition-colors"
+                          title="Delete Work Log"
                         >
                           <Trash2 size={16} />
                         </button>

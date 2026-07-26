@@ -11,7 +11,9 @@ import { generateUUID } from '../lib/utils';
 import { 
   getPaymentStatusInfo, 
   calculateClientFinancials, 
-  generateWhatsAppReminder 
+  generateWhatsAppReminder,
+  generateEmailReminder,
+  triggerBrowserOverdueAlert
 } from '../lib/paymentUtils';
 import ClientDashboard from './ClientDashboard';
 
@@ -38,7 +40,8 @@ export default function ClientsTab({ user }: ClientsTabProps) {
     defaultRate: '',
     onSiteShootRate: '',
     websiteMakingRate: '',
-    lastPaymentDate: new Date().toISOString().split('T')[0]
+    lastPaymentDate: new Date().toISOString().split('T')[0],
+    emailRemindersEnabled: true
   });
 
   // Calculate notification alerts across all clients
@@ -66,7 +69,8 @@ export default function ClientsTab({ user }: ClientsTabProps) {
             phone: formData.phone,
             email: formData.email,
             defaultRate: Number(formData.defaultRate),
-            lastPaymentDate: paymentDateTimestamp
+            lastPaymentDate: paymentDateTimestamp,
+            emailRemindersEnabled: formData.emailRemindersEnabled
           };
           
           if (formData.onSiteShootRate) updatedClient.onSiteShootRate = Number(formData.onSiteShootRate);
@@ -86,6 +90,7 @@ export default function ClientsTab({ user }: ClientsTabProps) {
           email: formData.email,
           defaultRate: Number(formData.defaultRate), 
           lastPaymentDate: paymentDateTimestamp,
+          emailRemindersEnabled: formData.emailRemindersEnabled,
           createdAt: Date.now() 
         };
         if (formData.onSiteShootRate) newClient.onSiteShootRate = Number(formData.onSiteShootRate);
@@ -101,7 +106,8 @@ export default function ClientsTab({ user }: ClientsTabProps) {
         defaultRate: '', 
         onSiteShootRate: '', 
         websiteMakingRate: '',
-        lastPaymentDate: new Date().toISOString().split('T')[0]
+        lastPaymentDate: new Date().toISOString().split('T')[0],
+        emailRemindersEnabled: true
       });
       setIsFormOpen(false);
     } catch (err: any) {
@@ -119,7 +125,8 @@ export default function ClientsTab({ user }: ClientsTabProps) {
       defaultRate: String(c.defaultRate),
       onSiteShootRate: c.onSiteShootRate ? String(c.onSiteShootRate) : '',
       websiteMakingRate: c.websiteMakingRate ? String(c.websiteMakingRate) : '',
-      lastPaymentDate: c.lastPaymentDate ? new Date(c.lastPaymentDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+      lastPaymentDate: c.lastPaymentDate ? new Date(c.lastPaymentDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      emailRemindersEnabled: c.emailRemindersEnabled !== false
     });
     setIsFormOpen(true);
   };
@@ -140,7 +147,8 @@ export default function ClientsTab({ user }: ClientsTabProps) {
       defaultRate: '', 
       onSiteShootRate: '', 
       websiteMakingRate: '',
-      lastPaymentDate: new Date().toISOString().split('T')[0]
+      lastPaymentDate: new Date().toISOString().split('T')[0],
+      emailRemindersEnabled: true
     });
     setIsFormOpen(false);
   };
@@ -238,7 +246,7 @@ export default function ClientsTab({ user }: ClientsTabProps) {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     onClick={() => setSelectedClientId(client.id)}
                     className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-xs font-semibold transition-colors"
@@ -254,6 +262,22 @@ export default function ClientsTab({ user }: ClientsTabProps) {
                   >
                     <Send size={12} />
                   </a>
+                  {client.emailRemindersEnabled !== false && (
+                    <a
+                      href={generateEmailReminder(client, statusInfo).mailtoLink}
+                      className="p-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-semibold transition-colors"
+                      title="Send Email Reminder"
+                    >
+                      <Mail size={12} />
+                    </a>
+                  )}
+                  <button
+                    onClick={() => triggerBrowserOverdueAlert(client.name, statusInfo.label, statusInfo.notificationMessage)}
+                    className="p-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-semibold transition-colors"
+                    title="Trigger Browser Alert / Notification"
+                  >
+                    <AlertTriangle size={12} />
+                  </button>
                 </div>
               </div>
             ))}
@@ -356,6 +380,27 @@ export default function ClientsTab({ user }: ClientsTabProps) {
                 onChange={e => setFormData({...formData, websiteMakingRate: e.target.value})}
                 className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm bg-slate-50 outline-none transition-colors focus:border-indigo-600"
                 placeholder="e.g. 15000"
+              />
+            </div>
+
+            <div className="md:col-span-2 p-3 bg-indigo-50/60 border border-indigo-100 rounded-xl flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Mail size={18} className="text-indigo-600 shrink-0" />
+                <div>
+                  <label htmlFor="emailRemindersToggle" className="text-xs font-bold text-slate-900 cursor-pointer">
+                    Enable Overdue Payment Email Reminders
+                  </label>
+                  <p className="text-[11px] text-slate-500">
+                    Automatically draft email reminders and trigger browser alerts when payment due dates are reached or overdue.
+                  </p>
+                </div>
+              </div>
+              <input
+                id="emailRemindersToggle"
+                type="checkbox"
+                checked={formData.emailRemindersEnabled}
+                onChange={e => setFormData({ ...formData, emailRemindersEnabled: e.target.checked })}
+                className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer shrink-0"
               />
             </div>
             

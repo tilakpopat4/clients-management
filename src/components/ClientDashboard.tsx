@@ -3,14 +3,17 @@ import { Client, Invoice, WorkItem } from '../types';
 import { 
   ArrowLeft, Calendar, Phone, Mail, Edit3, CheckCircle2, Clock, 
   IndianRupee, Plus, AlertTriangle, Send, FileText, ClipboardList,
-  Sparkles, ShieldAlert, DollarSign
+  Sparkles, ShieldAlert, DollarSign, Copy
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { useFirestore } from '../hooks/useFirestore';
 import { 
   getPaymentStatusInfo, 
   calculateClientFinancials, 
-  generateWhatsAppReminder 
+  generateWhatsAppReminder,
+  generateEmailReminder,
+  generateInvoiceEmailDetails,
+  triggerBrowserOverdueAlert
 } from '../lib/paymentUtils';
 import { generateUUID } from '../lib/utils';
 
@@ -39,6 +42,7 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
 
   // New Work Log modal state inside client dashboard
   const [isWorkFormOpen, setIsWorkFormOpen] = useState(false);
+  const [editingWorkId, setEditingWorkId] = useState<string | null>(null);
   const [workFormData, setWorkFormData] = useState({
     description: '',
     quantity: '1',
@@ -80,32 +84,98 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
     }
   };
 
-  // Add work log for this specific client
-  const handleAddWorkLog = async (e: React.FormEvent) => {
+  const handleStartEditWork = (item: WorkItem) => {
+    setEditingWorkId(item.id);
+    setWorkFormData({
+      description: item.description,
+      quantity: String(item.quantity),
+      rate: String(item.rate),
+      date: new Date(item.date).toISOString().split('T')[0]
+    });
+    setIsWorkFormOpen(true);
+  };
+
+  const handleCancelWorkForm = () => {
+    setEditingWorkId(null);
+    setWorkFormData({
+      description: '',
+      quantity: '1',
+      rate: String(client.defaultRate),
+      date: new Date().toISOString().split('T')[0]
+    });
+    setIsWorkFormOpen(false);
+  };
+
+  // Add or update work log for this specific client
+  const handleSaveWorkLog = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const newWork: WorkItem = {
-        id: generateUUID(),
-        clientId: client.id,
-        description: workFormData.description,
-        quantity: Number(workFormData.quantity),
-        rate: Number(workFormData.rate) || client.defaultRate,
-        date: new Date(workFormData.date).getTime(),
-        status: 'Uninvoiced',
-        createdAt: Date.now()
-      };
+      const selectedRate = Number(workFormData.rate) || client.defaultRate;
+      const selectedQty = Number(workFormData.quantity);
+      const selectedDate = new Date(workFormData.date).getTime();
 
-      await updateWorkItem(newWork);
-      setWorkFormData({
-        description: '',
-        quantity: '1',
-        rate: String(client.defaultRate),
-        date: new Date().toISOString().split('T')[0]
-      });
-      setIsWorkFormOpen(false);
+      if (editingWorkId) {
+        const existing = workItems.find(w => w.id === editingWorkId);
+        if (existing) {
+          const updatedWork: WorkItem = {
+            ...existing,
+            description: workFormData.description,
+            quantity: selectedQty,
+            rate: selectedRate,
+            date: selectedDate
+          };
+
+          // If item is invoiced, update the corresponding invoice reel details as well
+          if (existing.status === 'Invoiced' && existing.invoiceId) {
+            const invoice = invoices.find(inv => inv.id === existing.invoiceId);
+            if (invoice && invoice.reels) {
+              let replaced = false;
+              const updatedReels = invoice.reels.map((reel: any) => {
+                if (!replaced && reel.title === existing.description && reel.quantity === existing.quantity && reel.rate === existing.rate) {
+                  replaced = true;
+                  return {
+                    ...reel,
+                    title: workFormData.description,
+                    quantity: selectedQty,
+                    rate: selectedRate
+                  };
+                }
+                return reel;
+              });
+
+              const newSubtotal = updatedReels.reduce((sum: number, r: any) => sum + (r.quantity * r.rate), 0);
+              const discount = invoice.discountAmount || 0;
+              const newTotal = Math.max(0, newSubtotal - discount);
+
+              await updateInvoice({
+                ...invoice,
+                reels: updatedReels,
+                totalAmount: newTotal
+              });
+            }
+          }
+
+          await updateWorkItem(updatedWork);
+        }
+      } else {
+        const newWork: WorkItem = {
+          id: generateUUID(),
+          clientId: client.id,
+          description: workFormData.description,
+          quantity: selectedQty,
+          rate: selectedRate,
+          date: selectedDate,
+          status: 'Uninvoiced',
+          createdAt: Date.now()
+        };
+
+        await updateWorkItem(newWork);
+      }
+
+      handleCancelWorkForm();
     } catch (err: any) {
       console.error(err);
-      alert("Error adding work item: " + (err?.message || String(err)));
+      alert("Error saving work item: " + (err?.message || String(err)));
     }
   };
 
@@ -182,12 +252,35 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            {/* Quick Email Reminders Toggle */}
+            <button
+              onClick={async () => {
+                try {
+                  const updated = { ...client, emailRemindersEnabled: client.emailRemindersEnabled === false ? true : false };
+                  await updateClient(updated);
+                } catch (err) {
+                  console.error(err);
+                }
+              }}
+              className={`flex items-center justify-between gap-2 px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                client.emailRemindersEnabled !== false 
+                  ? 'bg-indigo-50 border-indigo-200 text-indigo-800 hover:bg-indigo-100' 
+                  : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
+              }`}
+              title="Toggle email reminders for overdue payments"
+            >
+              <div className="flex items-center gap-1.5">
+                <Mail size={14} className={client.emailRemindersEnabled !== false ? 'text-indigo-600' : 'text-slate-400'} />
+                <span>Email Reminders: {client.emailRemindersEnabled !== false ? 'ON' : 'OFF'}</span>
+              </div>
+            </button>
+
             <a
               href={generateWhatsAppReminder(client, statusInfo)}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-semibold transition-all shadow-sm"
+              className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-semibold transition-all shadow-sm"
             >
               <Send size={14} /> Send WhatsApp Reminder
             </a>
@@ -215,15 +308,22 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
               <AlertTriangle size={20} />
             </div>
             <div>
-              <h4 className="text-sm font-bold">{statusInfo.notificationTitle}</h4>
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-bold">{statusInfo.notificationTitle}</h4>
+                {client.emailRemindersEnabled !== false && (
+                  <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-indigo-100 text-indigo-800 border border-indigo-200">
+                    Email Reminders Active
+                  </span>
+                )}
+              </div>
               <p className="text-xs mt-0.5 opacity-90">{statusInfo.notificationMessage}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
             <button
               onClick={() => setIsUpdatingPaymentDate(true)}
-              className="px-3.5 py-1.5 bg-white border border-current rounded-lg text-xs font-bold hover:opacity-90 shadow-sm"
+              className="px-3 py-1.5 bg-white border border-current rounded-lg text-xs font-bold hover:opacity-90 shadow-sm"
             >
               Record Payment
             </button>
@@ -231,10 +331,25 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
               href={generateWhatsAppReminder(client, statusInfo)}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3.5 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 shadow-sm flex items-center gap-1"
+              className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 shadow-sm flex items-center gap-1"
             >
-              <Send size={12} /> Send Alert
+              <Send size={12} /> WhatsApp
             </a>
+            {client.emailRemindersEnabled !== false && (
+              <a
+                href={generateEmailReminder(client, statusInfo).mailtoLink}
+                className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 shadow-sm flex items-center gap-1"
+              >
+                <Mail size={12} /> Send Email
+              </a>
+            )}
+            <button
+              onClick={() => triggerBrowserOverdueAlert(client.name, statusInfo.label, statusInfo.notificationMessage)}
+              className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 shadow-sm flex items-center gap-1"
+              title="Trigger browser notification / alert"
+            >
+              <AlertTriangle size={12} /> Browser Alert
+            </button>
           </div>
         </div>
       )}
@@ -345,15 +460,15 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
               </button>
             </div>
 
-            {/* Quick Add Work Modal inside Client Dashboard */}
+            {/* Quick Add / Edit Work Modal inside Client Dashboard */}
             {isWorkFormOpen && (
               <div className="bg-slate-50 p-5 rounded-xl border border-indigo-200 space-y-4 animate-in fade-in">
                 <div className="flex justify-between items-center">
-                  <h4 className="text-sm font-bold text-slate-900">Add New Work Entry</h4>
-                  <button onClick={() => setIsWorkFormOpen(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+                  <h4 className="text-sm font-bold text-slate-900">{editingWorkId ? 'Edit Work Entry' : 'Add New Work Entry'}</h4>
+                  <button onClick={handleCancelWorkForm} className="text-slate-400 hover:text-slate-600">✕</button>
                 </div>
 
-                <form onSubmit={handleAddWorkLog} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <form onSubmit={handleSaveWorkLog} className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="md:col-span-2 space-y-1">
                     <label className="text-xs font-medium text-slate-600">Work Description *</label>
                     <input
@@ -404,7 +519,7 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
                   <div className="md:col-span-2 flex items-end justify-end gap-2">
                     <button
                       type="button"
-                      onClick={() => setIsWorkFormOpen(false)}
+                      onClick={handleCancelWorkForm}
                       className="px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-200 rounded"
                     >
                       Cancel
@@ -413,7 +528,7 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
                       type="submit"
                       className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-semibold transition-all shadow-sm"
                     >
-                      Save Work Log
+                      {editingWorkId ? 'Save Changes' : 'Save Work Log'}
                     </button>
                   </div>
                 </form>
@@ -464,7 +579,13 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
                             </span>
                           )}
                         </td>
-                        <td className="p-3.5 text-right">
+                        <td className="p-3.5 text-right space-x-2">
+                          <button
+                            onClick={() => handleStartEditWork(item)}
+                            className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold"
+                          >
+                            Edit
+                          </button>
                           <button
                             onClick={() => handleDeleteWork(item.id)}
                             className="text-xs text-rose-500 hover:text-rose-700 font-semibold"
@@ -499,41 +620,69 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
                     <th className="p-3.5">Reels / Line Items</th>
                     <th className="p-3.5 text-right">Total Amount</th>
                     <th className="p-3.5 text-center">Payment Status</th>
+                    <th className="p-3.5 text-right">Email Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
                   {clientInvoices.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="p-8 text-center text-slate-400">
+                      <td colSpan={5} className="p-8 text-center text-slate-400">
                         No invoices generated for this client yet.
                       </td>
                     </tr>
                   ) : (
-                    clientInvoices.map(inv => (
-                      <tr key={inv.id} className="hover:bg-slate-50/50">
-                        <td className="p-3.5 text-slate-600">
-                          {new Date(inv.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                        </td>
-                        <td className="p-3.5 text-slate-900">
-                          <div className="font-medium">{inv.reels.length} item(s)</div>
-                          <div className="text-xs text-slate-500 truncate max-w-xs">
-                            {inv.reels.map(r => r.title).join(', ')}
-                          </div>
-                        </td>
-                        <td className="p-3.5 text-right font-bold text-slate-900">
-                          ₹{inv.totalAmount.toLocaleString('en-IN')}
-                        </td>
-                        <td className="p-3.5 text-center">
-                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border ${
-                            inv.status === 'Paid' 
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                              : 'bg-amber-50 text-amber-700 border-amber-200'
-                          }`}>
-                            {inv.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
+                    clientInvoices.map(inv => {
+                      const emailData = generateInvoiceEmailDetails(client, inv, null);
+
+                      return (
+                        <tr key={inv.id} className="hover:bg-slate-50/50">
+                          <td className="p-3.5 text-slate-600">
+                            <div className="font-semibold text-slate-900">#{inv.id.substring(0, 8).toUpperCase()}</div>
+                            <div className="text-xs text-slate-500">{new Date(inv.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                          </td>
+                          <td className="p-3.5 text-slate-900">
+                            <div className="font-medium">{inv.reels.length} item(s)</div>
+                            <div className="text-xs text-slate-500 truncate max-w-xs">
+                              {inv.reels.map(r => r.title).join(', ')}
+                            </div>
+                          </td>
+                          <td className="p-3.5 text-right font-bold text-slate-900">
+                            ₹{inv.totalAmount.toLocaleString('en-IN')}
+                          </td>
+                          <td className="p-3.5 text-center">
+                            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border ${
+                              inv.status === 'Paid' 
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                            }`}>
+                              {inv.status}
+                            </span>
+                          </td>
+                          <td className="p-3.5 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <a
+                                href={emailData.mailtoLink}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs"
+                                title="Send Email for this Invoice"
+                              >
+                                <Mail size={13} /> Send Email
+                              </a>
+
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(`Subject: ${emailData.subject}\n\n${emailData.body}`);
+                                  alert(`Invoice email details for ${client.name} copied to clipboard!`);
+                                }}
+                                className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors"
+                                title="Copy Email Text to Clipboard"
+                              >
+                                <Copy size={13} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

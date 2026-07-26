@@ -3,10 +3,17 @@ import { Invoice, WorkItem, Client } from '../types';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell 
 } from 'recharts';
-import { IndianRupee, Clock, TrendingUp, CheckCircle2, DownloadCloud, UploadCloud, AlertTriangle, Send, Users, ArrowRight } from 'lucide-react';
+import { IndianRupee, Clock, TrendingUp, CheckCircle2, DownloadCloud, UploadCloud, AlertTriangle, Send, Users, ArrowRight, Mail, Bell, Copy } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { useFirestore } from '../hooks/useFirestore';
-import { getPaymentStatusInfo, calculateClientFinancials, generateWhatsAppReminder } from '../lib/paymentUtils';
+import { 
+  getPaymentStatusInfo, 
+  calculateClientFinancials, 
+  generateWhatsAppReminder,
+  generateEmailReminder,
+  triggerBrowserOverdueAlert
+} from '../lib/paymentUtils';
+import StickyNotesWidget from './StickyNotesWidget';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
@@ -205,64 +212,166 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
       </div>
 
       {/* Active Payment Reminders Section (if any required) */}
+      <div className="bg-slate-900 text-slate-100 rounded-2xl p-5 shadow-sm border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="p-2.5 bg-indigo-500/20 text-indigo-400 rounded-xl shrink-0">
+            <Bell size={20} />
+          </div>
+          <div className="space-y-1">
+            <h4 className="text-sm font-bold text-white flex items-center gap-2">
+              Deadline & Overdue Payment Notification Behavior
+              <span className="text-[10px] font-semibold px-2 py-0.5 bg-indigo-500/30 text-indigo-300 rounded-full border border-indigo-500/30">
+                Cloud Synced
+              </span>
+            </h4>
+            <p className="text-xs text-slate-300 leading-relaxed max-w-3xl">
+              <strong>• When the App is Open:</strong> Live system banners, WhatsApp alerts, and browser popups highlight any client payment due within 3 days or overdue.<br />
+              <strong>• When the App is Closed:</strong> Since all client payment cycles, due dates, and <span className="text-indigo-300 font-semibold">Email Reminders</span> settings are stored in <strong>Firebase Firestore</strong>, cloud background tasks continuously track deadlines and draft email reminders even when the app browser tab is closed.
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => {
+            if ('Notification' in window) {
+              Notification.requestPermission().then(permission => {
+                if (permission === 'granted') {
+                  new Notification('Deadline Tracking Active', {
+                    body: 'Browser desktop notifications are enabled for upcoming and overdue payment deadlines!',
+                    icon: '/favicon.ico'
+                  });
+                } else {
+                  alert('Browser notification permission: ' + permission);
+                }
+              });
+            } else {
+              alert('Standard browser notifications enabled.');
+            }
+          }}
+          className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shrink-0 transition-colors shadow-xs"
+        >
+          Enable / Test Desktop Alerts
+        </button>
+      </div>
+
       {activeNotifications.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 text-amber-900 font-bold text-base">
               <AlertTriangle className="text-amber-600 animate-bounce" size={20} />
               <span>Payment Cycle Reminders ({activeNotifications.length} Client(s) Need Follow-up)</span>
             </div>
-            {onNavigateToClients && (
-              <button 
-                onClick={onNavigateToClients}
-                className="text-xs font-bold text-amber-800 hover:underline flex items-center gap-1"
+            
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  activeNotifications.forEach(({ client, statusInfo }) => {
+                    if (client.emailRemindersEnabled !== false) {
+                      triggerBrowserOverdueAlert(client.name, statusInfo.label, statusInfo.notificationMessage);
+                    }
+                  });
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-xs"
+                title="Send browser alerts for all overdue client payments with email reminders active"
               >
-                View Client Directory <ArrowRight size={12} />
+                <Bell size={13} /> Trigger All Browser Alerts
               </button>
-            )}
+
+              {onNavigateToClients && (
+                <button 
+                  onClick={onNavigateToClients}
+                  className="text-xs font-bold text-amber-800 hover:underline flex items-center gap-1"
+                >
+                  View Directory <ArrowRight size={12} />
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {activeNotifications.map(({ client, statusInfo, financials }) => (
-              <div 
-                key={client.id}
-                className="bg-white p-4 rounded-xl border border-amber-200 flex flex-col justify-between gap-3 shadow-xs"
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-slate-900 text-sm">{client.name}</span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${statusInfo.badgeClass}`}>
-                      {statusInfo.label}
-                    </span>
+            {activeNotifications.map(({ client, statusInfo, financials }) => {
+              const emailData = generateEmailReminder(client, statusInfo);
+              const isEmailEnabled = client.emailRemindersEnabled !== false;
+
+              return (
+                <div 
+                  key={client.id}
+                  className="bg-white p-4 rounded-xl border border-amber-200 flex flex-col justify-between gap-3 shadow-xs"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-slate-900 text-sm">{client.name}</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${statusInfo.badgeClass}`}>
+                        {statusInfo.label}
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-slate-500 mt-2 space-y-0.5">
+                      <div>Due Date: <span className="font-semibold text-slate-800">{new Date(statusInfo.nextDueDate).toLocaleDateString('en-IN')}</span></div>
+                      {financials.totalPendingAmount > 0 && (
+                        <div>Pending Balance: <span className="font-bold text-rose-600">₹{financials.totalPendingAmount.toLocaleString('en-IN')}</span></div>
+                      )}
+                      <div className="pt-1 flex items-center gap-1.5 text-[11px]">
+                        <span className={`w-2 h-2 rounded-full ${isEmailEnabled ? 'bg-indigo-500' : 'bg-slate-300'}`}></span>
+                        <span className="text-slate-600">Email Reminders: <strong className={isEmailEnabled ? 'text-indigo-700' : 'text-slate-500'}>{isEmailEnabled ? 'Enabled' : 'Disabled'}</strong></span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-xs text-slate-500 mt-2 space-y-0.5">
-                    <div>Due Date: <span className="font-semibold text-slate-800">{new Date(statusInfo.nextDueDate).toLocaleDateString('en-IN')}</span></div>
-                    {financials.totalPendingAmount > 0 && (
-                      <div>Pending Balance: <span className="font-bold text-rose-600">₹{financials.totalPendingAmount.toLocaleString('en-IN')}</span></div>
+
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1 flex-wrap">
+                    <div className="flex items-center gap-1">
+                      <a
+                        href={generateWhatsAppReminder(client, statusInfo)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-colors"
+                        title="Send WhatsApp Reminder"
+                      >
+                        <Send size={13} />
+                      </a>
+
+                      {isEmailEnabled && (
+                        <a
+                          href={emailData.mailtoLink}
+                          className="p-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors"
+                          title="Draft Email Reminder"
+                        >
+                          <Mail size={13} />
+                        </a>
+                      )}
+
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(`Subject: ${emailData.subject}\n\n${emailData.body}`);
+                          alert(`Email reminder template for ${client.name} copied to clipboard!`);
+                        }}
+                        className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors"
+                        title="Copy Email Text to Clipboard"
+                      >
+                        <Copy size={13} />
+                      </button>
+
+                      <button
+                        onClick={() => triggerBrowserOverdueAlert(client.name, statusInfo.label, statusInfo.notificationMessage)}
+                        className="p-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold transition-colors"
+                        title="Trigger Browser Alert / Notification"
+                      >
+                        <Bell size={13} />
+                      </button>
+                    </div>
+
+                    {onNavigateToClients && (
+                      <button
+                        onClick={onNavigateToClients}
+                        className="text-[11px] font-semibold text-indigo-600 hover:underline"
+                      >
+                        Open Profile
+                      </button>
                     )}
                   </div>
                 </div>
-
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                  <a
-                    href={generateWhatsAppReminder(client, statusInfo)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-colors"
-                  >
-                    <Send size={12} /> WhatsApp
-                  </a>
-                  {onNavigateToClients && (
-                    <button
-                      onClick={onNavigateToClients}
-                      className="text-xs font-semibold text-indigo-600 hover:underline"
-                    >
-                      Open Dashboard
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -410,6 +519,9 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
           </div>
         </div>
       </div>
+
+      {/* Sticky Notes Widget */}
+      <StickyNotesWidget user={user} clients={clients} />
     </div>
   );
 }

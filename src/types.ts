@@ -8,6 +8,7 @@ export interface Client {
   websiteMakingRate?: number;
   lastPaymentDate?: number; // timestamp in ms of previous payment date
   paymentCycleDays?: number; // default 30 days
+  emailRemindersEnabled?: boolean; // toggle for overdue payment email reminders
   notes?: string;
   createdAt: number;
 }
@@ -50,6 +51,19 @@ export interface UserProfile {
   upiId: string;
   professionalTitle: string;
   servicesDescription: string;
+  accountNumber?: string;
+  ifscCode?: string;
+  bankName?: string;
   createdAt: number;
+}
+
+export interface StickyNote {
+  id: string;
+  clientId: string; // client ID, or 'general' / '' for general notes
+  content: string;
+  color: 'yellow' | 'blue' | 'green' | 'pink' | 'purple';
+  createdAt: number;
+  updatedAt?: number;
+  userId?: string;
 }
 

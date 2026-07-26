@@ -57,6 +57,20 @@
       ]
     },
     {
+      "name": "notes",
+      "path": "notes/{noteId}",
+      "rules": [
+        {
+          "operations": ["read", "update", "delete"],
+          "condition": "request.auth != null && request.auth.uid == resource.data.userId"
+        },
+        {
+          "operations": ["create"],
+          "condition": "request.auth != null && request.resource.data.userId == request.auth.uid"
+        }
+      ]
+    },
+    {
       "name": "blocked_users",
       "path": "blocked_users/{userId}",
       "rules": [

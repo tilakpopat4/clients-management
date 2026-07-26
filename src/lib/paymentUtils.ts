@@ -1,4 +1,4 @@
-import { Client, Invoice, WorkItem } from '../types';
+import { Client, Invoice, WorkItem, UserProfile } from '../types';
 
 export interface PaymentStatusInfo {
   nextDueDate: number; // timestamp in ms
@@ -146,3 +146,145 @@ export function generateWhatsAppReminder(client: Client, statusInfo: PaymentStat
 
   return `https://wa.me/${client.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
 }
+
+export function generateEmailReminder(client: Client, statusInfo: PaymentStatusInfo, senderName: string = 'Tilak Popat') {
+  const dueDateStr = new Date(statusInfo.nextDueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  const pendingAmountStr = statusInfo.totalPendingAmount > 0
+    ? `Pending Amount: ₹${statusInfo.totalPendingAmount.toLocaleString('en-IN')}`
+    : 'Pending Monthly Invoice Payment';
+
+  const isOverdue = statusInfo.daysRemaining < 0;
+  const overdueDays = Math.abs(statusInfo.daysRemaining);
+
+  const subject = isOverdue
+    ? `[Payment Overdue Notice] ${client.name} - ${pendingAmountStr}`
+    : `[Friendly Payment Reminder] ${client.name} - Payment Cycle Due ${dueDateStr}`;
+
+  let body = `Dear ${client.name},\n\n`;
+
+  if (isOverdue) {
+    body += `This is an email reminder regarding your video production and editing service payment that was due on ${dueDateStr} (${overdueDays} day${overdueDays > 1 ? 's' : ''} overdue).\n\n`;
+    if (statusInfo.totalPendingAmount > 0) {
+      body += `Outstanding Total: ₹${statusInfo.totalPendingAmount.toLocaleString('en-IN')}\n\n`;
+    }
+    body += `Kindly arrange for the payment to be processed at your earliest convenience. If you have already completed the transaction, please disregard this note or reply with the payment confirmation.\n\n`;
+  } else {
+    body += `This is a friendly reminder that your monthly video production payment cycle due date is ${dueDateStr}.\n\n`;
+    if (statusInfo.totalPendingAmount > 0) {
+      body += `Current Pending Amount: ₹${statusInfo.totalPendingAmount.toLocaleString('en-IN')}\n\n`;
+    }
+    body += `Please ensure payment is settled by the due date.\n\n`;
+  }
+
+  body += `Thank you for your continued partnership!\n\nBest regards,\n${senderName}`;
+
+  const mailtoLink = client.email 
+    ? `mailto:${encodeURIComponent(client.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    : `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+  return { subject, body, mailtoLink };
+}
+
+export async function triggerBrowserOverdueAlert(clientName: string, statusLabel: string, message: string) {
+  // Check Web Notification API support
+  if ('Notification' in window) {
+    if (Notification.permission === 'granted') {
+      new Notification(`Overdue Payment Alert: ${clientName}`, {
+        body: `${statusLabel} - ${message}`,
+        icon: '/favicon.ico'
+      });
+      return true;
+    } else if (Notification.permission !== 'denied') {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        new Notification(`Overdue Payment Alert: ${clientName}`, {
+          body: `${statusLabel} - ${message}`,
+          icon: '/favicon.ico'
+        });
+        return true;
+      }
+    }
+  }
+
+  // Fallback to standard browser alert modal
+  alert(`🚨 OVERDUE PAYMENT ALERT 🚨\n\nClient: ${clientName}\nStatus: ${statusLabel}\n\nDetails: ${message}`);
+  return false;
+}
+
+export function generateInvoiceEmailDetails(
+  client: Client,
+  invoice: {
+    id: string;
+    date: number;
+    reels: Array<{ title: string; quantity: number; rate: number }>;
+    totalAmount: number;
+    discountAmount?: number;
+    discountDescription?: string;
+  },
+  profile: UserProfile | null,
+  dateFrom?: string,
+  dateTo?: string
+) {
+  const invoiceDateStr = new Date(invoice.date).toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
+
+  const monthCycleStr = dateFrom && dateTo 
+    ? `${new Date(dateFrom).toLocaleDateString('en-IN', { month: 'short', day: '2-digit' })} - ${new Date(dateTo).toLocaleDateString('en-IN', { month: 'short', day: '2-digit', year: 'numeric' })}`
+    : new Date(invoice.date).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+
+  const senderName = profile?.name || 'Tilak Popat';
+  const upiId = profile?.upiId || 'tilakpopat2007-1@okaxis';
+
+  const invoiceNo = `INV-${invoice.id.substring(0, 8).toUpperCase()}`;
+  const subject = `Invoice ${invoiceNo} - ${client.name} (${monthCycleStr})`;
+
+  let body = `Dear ${client.name},\n\n`;
+  body += `Please find below the detailed invoice breakdown for your video production & editing services cycle (${monthCycleStr}).\n\n`;
+  body += `========================================\n`;
+  body += `INVOICE SUMMARY:\n`;
+  body += `========================================\n`;
+  body += `Invoice No: ${invoiceNo}\n`;
+  body += `Date: ${invoiceDateStr}\n`;
+  body += `Billing Cycle Period: ${monthCycleStr}\n`;
+  body += `Client Name: ${client.name}\n\n`;
+
+  body += `ITEMIZED WORK BREAKDOWN:\n`;
+  body += `----------------------------------------\n`;
+  invoice.reels.forEach((reel, idx) => {
+    const itemTotal = reel.quantity * reel.rate;
+    body += `${idx + 1}. ${reel.title || 'Video Editing Services'}\n`;
+    body += `   Quantity: ${reel.quantity} | Rate: ₹${reel.rate.toLocaleString('en-IN')} | Total: ₹${itemTotal.toLocaleString('en-IN')}\n\n`;
+  });
+
+  const subtotal = invoice.reels.reduce((sum, r) => sum + (r.quantity * r.rate), 0);
+  body += `----------------------------------------\n`;
+  body += `Subtotal: ₹${subtotal.toLocaleString('en-IN')}\n`;
+
+  if (invoice.discountAmount && invoice.discountAmount > 0) {
+    body += `Deduction (${invoice.discountDescription || 'Discount'}): -₹${invoice.discountAmount.toLocaleString('en-IN')}\n`;
+  }
+
+  body += `TOTAL PAYABLE AMOUNT: ₹${invoice.totalAmount.toLocaleString('en-IN')}\n`;
+  body += `========================================\n\n`;
+
+  body += `PAYMENT DETAILS:\n`;
+  body += `• Payment Method: UPI Transfer\n`;
+  body += `• UPI ID: ${upiId}\n`;
+  body += `• Account Holder: ${senderName}\n`;
+  if (profile?.accountNumber) {
+    body += `• Bank Account No: ${profile.accountNumber}\n`;
+    body += `• IFSC Code: ${profile.ifscCode || 'N/A'}\n`;
+    body += `• Bank Name: ${profile.bankName || 'N/A'}\n`;
+  }
+  body += `\nThank you for your business! Please reply or share payment confirmation once processed.\n\nBest regards,\n${senderName}`;
+
+  const mailtoLink = client.email 
+    ? `mailto:${encodeURIComponent(client.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    : `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+  return { subject, body, mailtoLink, monthCycleStr, invoiceNo };
+}
+

@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Client, Reel, Invoice, WorkItem, UserProfile } from '../types';
-import { Plus, Trash2, Download, Receipt, FileCheck } from 'lucide-react';
+import { Plus, Trash2, Download, Receipt, FileCheck, Mail, Send, Copy, X, Check, MailCheck } from 'lucide-react';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 import { useFirestore } from '../hooks/useFirestore';
 import { User } from 'firebase/auth';
 import { generateUUID } from '../lib/utils';
+import { generateInvoiceEmailDetails } from '../lib/paymentUtils';
 import Logo from './Logo';
 import QRCode from 'qrcode';
 
@@ -117,6 +118,17 @@ export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
   const [discountAmount, setDiscountAmount] = useState<string>('');
   const [discountDescription, setDiscountDescription] = useState<string>('');
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+  const [emailModalData, setEmailModalData] = useState<{
+    isOpen: boolean;
+    clientName: string;
+    clientEmail: string;
+    subject: string;
+    body: string;
+    mailtoLink: string;
+    monthCycleStr: string;
+    invoiceNo: string;
+    totalAmount: number;
+  } | null>(null);
 
   const selectedClient = clients.find(c => c.id === selectedClientId);
 
@@ -322,6 +334,29 @@ export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
         setLinkedWorkItemIds([]);
         setDiscountAmount('');
         setDiscountDescription('');
+
+        // Generate email details for this specific month cycle's invoice
+        const emailDetails = generateInvoiceEmailDetails(selectedClient, newInvoice, profile, dateFrom, dateTo);
+
+        // Auto-launch default email client via mailto link
+        try {
+          window.location.href = emailDetails.mailtoLink;
+        } catch (e) {
+          console.warn("Could not auto-redirect to mailto:", e);
+        }
+
+        // Display modal with invoice email details and action buttons
+        setEmailModalData({
+          isOpen: true,
+          clientName: selectedClient.name,
+          clientEmail: selectedClient.email || '',
+          subject: emailDetails.subject,
+          body: emailDetails.body,
+          mailtoLink: emailDetails.mailtoLink,
+          monthCycleStr: emailDetails.monthCycleStr,
+          invoiceNo: emailDetails.invoiceNo,
+          totalAmount: grandTotal
+        });
       } catch (err: any) {
         console.error("Error saving to cloud:", err);
         alert("Error saving invoice/work items to cloud: " + (err?.message || String(err)));
@@ -692,6 +727,206 @@ export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
           </div>
         </div>
       </div>
+
+      {/* Invoice History & Email Actions Section */}
+      <div className="mt-12 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <Receipt size={20} className="text-indigo-600" />
+              Invoice History & Email Dispatch
+            </h3>
+            <p className="text-xs text-slate-500">
+              View generated cycle invoices and resend email notifications with itemized work details.
+            </p>
+          </div>
+          <span className="text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full border border-slate-200 self-start sm:self-auto">
+            {invoices.length} Total Invoices
+          </span>
+        </div>
+
+        {invoices.length === 0 ? (
+          <div className="py-12 border-2 border-dashed border-slate-200 rounded-xl text-center text-slate-400 space-y-1">
+            <p className="text-xs font-semibold text-slate-600">No invoices generated yet</p>
+            <p className="text-[11px]">Select a client above and click "Download PDF Invoice" to generate an invoice & send email.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto border border-slate-200 rounded-xl">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <th className="p-3.5">Invoice No / Date</th>
+                  <th className="p-3.5">Client</th>
+                  <th className="p-3.5">Items / Summary</th>
+                  <th className="p-3.5 text-right">Total Amount</th>
+                  <th className="p-3.5 text-center">Status</th>
+                  <th className="p-3.5 text-right">Email Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-sm">
+                {invoices.slice().sort((a, b) => b.date - a.date).map((inv) => {
+                  const clientObj = clients.find(c => c.id === inv.clientId) || {
+                    id: inv.clientId,
+                    name: inv.clientName,
+                    email: '',
+                    phone: '',
+                    defaultRate: 0,
+                    createdAt: 0
+                  };
+
+                  const emailDetails = generateInvoiceEmailDetails(clientObj, inv, profile);
+
+                  return (
+                    <tr key={inv.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="p-3.5 font-mono text-xs text-slate-700">
+                        <div className="font-bold text-slate-900">#{inv.id.substring(0, 8).toUpperCase()}</div>
+                        <div className="text-[11px] text-slate-400">
+                          {new Date(inv.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </div>
+                      </td>
+                      <td className="p-3.5 font-medium text-slate-900">
+                        <div>{inv.clientName}</div>
+                        {clientObj.email && (
+                          <div className="text-[11px] text-slate-400 font-normal">{clientObj.email}</div>
+                        )}
+                      </td>
+                      <td className="p-3.5 text-slate-600">
+                        <div className="font-semibold text-xs text-slate-800">{inv.reels.length} item(s)</div>
+                        <div className="text-[11px] text-slate-400 truncate max-w-xs">
+                          {inv.reels.map(r => r.title).join(', ')}
+                        </div>
+                      </td>
+                      <td className="p-3.5 text-right font-bold text-slate-900">
+                        ₹{inv.totalAmount.toLocaleString('en-IN')}
+                      </td>
+                      <td className="p-3.5 text-center">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                          inv.status === 'Paid'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}>
+                          {inv.status}
+                        </span>
+                      </td>
+                      <td className="p-3.5 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <a
+                            href={emailDetails.mailtoLink}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs"
+                            title="Draft / Send Email for this Invoice"
+                          >
+                            <Mail size={13} /> Send Email
+                          </a>
+
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(`Subject: ${emailDetails.subject}\n\n${emailDetails.body}`);
+                              alert(`Invoice email details for ${inv.clientName} copied to clipboard!`);
+                            }}
+                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors"
+                            title="Copy Email Text to Clipboard"
+                          >
+                            <Copy size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Email Sent / Prepared Modal */}
+      {emailModalData && emailModalData.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-5 my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-emerald-100 text-emerald-700 rounded-xl">
+                  <MailCheck size={24} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    Invoice Email Ready for {emailModalData.clientName}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Cycle: <span className="font-semibold text-slate-700">{emailModalData.monthCycleStr}</span> • Amount: <span className="font-bold text-emerald-600">₹{emailModalData.totalAmount.toLocaleString('en-IN')}</span>
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setEmailModalData(null)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-1">
+              <p className="font-bold flex items-center gap-1.5">
+                📬 Email Client Triggered Automatically
+              </p>
+              <p className="text-[11px] leading-relaxed text-amber-800">
+                Your default mail app (Gmail / Outlook / Apple Mail) should open with the pre-filled invoice details. If it didn't launch automatically, click <strong>"Open Mail App"</strong> or copy the pre-formatted text below.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Email Subject</label>
+                <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono font-medium text-slate-800">
+                  {emailModalData.subject}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-700">Detailed Invoice Email Content</label>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(`Subject: ${emailModalData.subject}\n\n${emailModalData.body}`);
+                      alert("Invoice email content copied to clipboard!");
+                    }}
+                    className="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1"
+                  >
+                    <Copy size={12} /> Copy Email Body
+                  </button>
+                </div>
+                <pre className="p-3.5 bg-slate-900 text-slate-100 rounded-xl text-xs font-mono leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto">
+                  {emailModalData.body}
+                </pre>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-100">
+              <span className="text-xs text-slate-400">
+                To: <strong className="text-slate-700">{emailModalData.clientEmail || 'No email provided'}</strong>
+              </span>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setEmailModalData(null)}
+                  className="flex-1 sm:flex-none px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  Close
+                </button>
+
+                <a
+                  href={emailModalData.mailtoLink}
+                  className="flex-1 sm:flex-none px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs flex items-center justify-center gap-1.5"
+                >
+                  <Mail size={14} /> Open Mail App
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
