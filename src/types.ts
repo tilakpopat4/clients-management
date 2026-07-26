@@ -6,6 +6,9 @@ export interface Client {
   defaultRate: number;
   onSiteShootRate?: number;
   websiteMakingRate?: number;
+  lastPaymentDate?: number; // timestamp in ms of previous payment date
+  paymentCycleDays?: number; // default 30 days
+  notes?: string;
   createdAt: number;
 }
 

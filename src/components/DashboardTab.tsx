@@ -1,23 +1,39 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Invoice, WorkItem } from '../types';
+import { Invoice, WorkItem, Client } from '../types';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell 
 } from 'recharts';
-import { IndianRupee, Clock, TrendingUp, CheckCircle2, DownloadCloud, UploadCloud } from 'lucide-react';
+import { IndianRupee, Clock, TrendingUp, CheckCircle2, DownloadCloud, UploadCloud, AlertTriangle, Send, Users, ArrowRight } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { useFirestore } from '../hooks/useFirestore';
+import { getPaymentStatusInfo, calculateClientFinancials, generateWhatsAppReminder } from '../lib/paymentUtils';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
 interface DashboardTabProps {
   user: User | null;
+  onNavigateToClients?: () => void;
 }
 
-export default function DashboardTab({ user }: DashboardTabProps) {
+export default function DashboardTab({ user, onNavigateToClients }: DashboardTabProps) {
+  const { data: clients } = useFirestore<Client>('clients', user?.uid);
   const { data: invoices, loading, addOrUpdateItem, removeItem, batchReplaceAll } = useFirestore<Invoice>('invoices', user?.uid);
   const { batchReplaceAll: batchReplaceClients } = useFirestore<any>('clients', user?.uid);
   const { data: workItems, addOrUpdateItem: updateWorkItem } = useFirestore<WorkItem>('workItems', user?.uid);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Client statuses & notifications
+  const clientStatuses = useMemo(() => {
+    return clients.map(c => ({
+      client: c,
+      statusInfo: getPaymentStatusInfo(c, invoices, workItems),
+      financials: calculateClientFinancials(c.id, invoices, workItems)
+    }));
+  }, [clients, invoices, workItems]);
+
+  const activeNotifications = useMemo(() => {
+    return clientStatuses.filter(cs => cs.statusInfo.isNotificationRequired);
+  }, [clientStatuses]);
 
   // Calculate metrics for current month
   const metrics = useMemo(() => {
@@ -29,7 +45,6 @@ export default function DashboardTab({ user }: DashboardTabProps) {
     let totalDue = 0;
     let totalInvoicesThisMonth = 0;
     
-    // Revenue by client for the chart (all time or this month, let's do this month for relevance)
     const clientRevenueMap = new Map<string, number>();
 
     invoices.forEach(inv => {
@@ -66,7 +81,6 @@ export default function DashboardTab({ user }: DashboardTabProps) {
   const deleteInvoice = async (id: string) => {
     if (confirm('Are you sure you want to delete this invoice record?')) {
       try {
-        // Find all work items that have this invoiceId
         const linkedWork = workItems.filter(w => w.invoiceId === id);
         for (const item of linkedWork) {
           const updatedItem = { ...item };
@@ -83,7 +97,6 @@ export default function DashboardTab({ user }: DashboardTabProps) {
   };
 
   const handleExport = () => {
-    // Basic export from current state, ideally should fetch everything but good enough for now
     const data = {
       clients: localStorage.getItem('clients') || '[]',
       monthlyWork: JSON.stringify(invoices),
@@ -145,7 +158,6 @@ export default function DashboardTab({ user }: DashboardTabProps) {
     }
   };
 
-  // Sort invoices by date descending
   const recentInvoices = [...invoices].sort((a, b) => b.date - a.date);
 
   if (loading) {
@@ -153,11 +165,11 @@ export default function DashboardTab({ user }: DashboardTabProps) {
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
-      <div className="mb-8 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div className="p-8 max-w-7xl mx-auto space-y-8">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Dashboard</h2>
-          <p className="text-slate-500 mt-1">Overview of your monthly earnings and due payments.</p>
+          <p className="text-slate-500 mt-1">Overview of your monthly earnings, client payment cycles & due reminders.</p>
         </div>
         
         <div className="flex flex-wrap items-center gap-3">
@@ -192,8 +204,71 @@ export default function DashboardTab({ user }: DashboardTabProps) {
         </div>
       </div>
 
+      {/* Active Payment Reminders Section (if any required) */}
+      {activeNotifications.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5 text-amber-900 font-bold text-base">
+              <AlertTriangle className="text-amber-600 animate-bounce" size={20} />
+              <span>Payment Cycle Reminders ({activeNotifications.length} Client(s) Need Follow-up)</span>
+            </div>
+            {onNavigateToClients && (
+              <button 
+                onClick={onNavigateToClients}
+                className="text-xs font-bold text-amber-800 hover:underline flex items-center gap-1"
+              >
+                View Client Directory <ArrowRight size={12} />
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {activeNotifications.map(({ client, statusInfo, financials }) => (
+              <div 
+                key={client.id}
+                className="bg-white p-4 rounded-xl border border-amber-200 flex flex-col justify-between gap-3 shadow-xs"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-slate-900 text-sm">{client.name}</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${statusInfo.badgeClass}`}>
+                      {statusInfo.label}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-500 mt-2 space-y-0.5">
+                    <div>Due Date: <span className="font-semibold text-slate-800">{new Date(statusInfo.nextDueDate).toLocaleDateString('en-IN')}</span></div>
+                    {financials.totalPendingAmount > 0 && (
+                      <div>Pending Balance: <span className="font-bold text-rose-600">₹{financials.totalPendingAmount.toLocaleString('en-IN')}</span></div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                  <a
+                    href={generateWhatsAppReminder(client, statusInfo)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-colors"
+                  >
+                    <Send size={12} /> WhatsApp
+                  </a>
+                  {onNavigateToClients && (
+                    <button
+                      onClick={onNavigateToClients}
+                      className="text-xs font-semibold text-indigo-600 hover:underline"
+                    >
+                      Open Dashboard
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Metric Cards */}
-      <div className="grid md:grid-cols-3 gap-6 mb-8">
+      <div className="grid md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-start gap-4">
           <div className="p-3 bg-emerald-100 text-emerald-600 rounded-lg">
             <IndianRupee size={24} />

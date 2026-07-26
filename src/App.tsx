@@ -203,7 +203,7 @@ export default function App() {
         onEditProfile={() => setIsProfileModalOpen(true)}
       />
       <main className="flex-1 overflow-y-auto relative pb-20 md:pb-0">
-        {activeTab === 'dashboard' && <DashboardTab user={user} />}
+        {activeTab === 'dashboard' && <DashboardTab user={user} onNavigateToClients={() => setActiveTab('clients')} />}
         {activeTab === 'clients' && <ClientsTab user={user} />}
         {activeTab === 'work' && <WorkLogTab user={user} />}
         {activeTab === 'invoice' && <InvoiceTab user={user} profile={profile} />}
