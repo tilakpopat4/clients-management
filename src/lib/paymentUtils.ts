@@ -132,22 +132,22 @@ export function getPaymentStatusInfo(
   };
 }
 
-export function generateWhatsAppReminder(client: Client, statusInfo: PaymentStatusInfo): string {
+export function generateWhatsAppReminder(client: Client, statusInfo: PaymentStatusInfo, senderName: string = 'Video Editor'): string {
   const dueDateStr = new Date(statusInfo.nextDueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
   const pendingAmountStr = statusInfo.totalPendingAmount > 0 
     ? `Amount due: ₹${statusInfo.totalPendingAmount.toLocaleString('en-IN')}\n`
     : '';
 
-  let message = `Hi ${client.name},\n\nHope you are doing well!\n\nThis is a friendly reminder regarding your video editing service cycle ending on ${dueDateStr}.\n${pendingAmountStr}\nKindly request you to clear the payment at your earliest convenience.\n\nThank you!\nTilak Popat`;
+  let message = `Hi ${client.name},\n\nHope you are doing well!\n\nThis is a friendly reminder regarding your video editing service cycle ending on ${dueDateStr}.\n${pendingAmountStr}\nKindly request you to clear the payment at your earliest convenience.\n\nThank you!\n${senderName}`;
 
   if (statusInfo.daysRemaining < 0) {
-    message = `Hi ${client.name},\n\nHope you are doing well!\n\nThis is a follow-up regarding the payment due on ${dueDateStr} (${Math.abs(statusInfo.daysRemaining)} days delayed).\n${pendingAmountStr}\nPlease share the transaction update once done.\n\nThank you!\nTilak Popat`;
+    message = `Hi ${client.name},\n\nHope you are doing well!\n\nThis is a follow-up regarding the payment due on ${dueDateStr} (${Math.abs(statusInfo.daysRemaining)} days delayed).\n${pendingAmountStr}\nPlease share the transaction update once done.\n\nThank you!\n${senderName}`;
   }
 
   return `https://wa.me/${client.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
 }
 
-export function generateEmailReminder(client: Client, statusInfo: PaymentStatusInfo, senderName: string = 'Tilak Popat') {
+export function generateEmailReminder(client: Client, statusInfo: PaymentStatusInfo, senderName: string = 'Video Editor') {
   const dueDateStr = new Date(statusInfo.nextDueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
   const pendingAmountStr = statusInfo.totalPendingAmount > 0
     ? `Pending Amount: ₹${statusInfo.totalPendingAmount.toLocaleString('en-IN')}`
@@ -191,7 +191,7 @@ export async function triggerBrowserOverdueAlert(clientName: string, statusLabel
     if (Notification.permission === 'granted') {
       new Notification(`Overdue Payment Alert: ${clientName}`, {
         body: `${statusLabel} - ${message}`,
-        icon: '/favicon.ico'
+        icon: '/app_logo_icon.png'
       });
       return true;
     } else if (Notification.permission !== 'denied') {
@@ -199,7 +199,7 @@ export async function triggerBrowserOverdueAlert(clientName: string, statusLabel
       if (permission === 'granted') {
         new Notification(`Overdue Payment Alert: ${clientName}`, {
           body: `${statusLabel} - ${message}`,
-          icon: '/favicon.ico'
+          icon: '/app_logo_icon.png'
         });
         return true;
       }
@@ -235,8 +235,8 @@ export function generateInvoiceEmailDetails(
     ? `${new Date(dateFrom).toLocaleDateString('en-IN', { month: 'short', day: '2-digit' })} - ${new Date(dateTo).toLocaleDateString('en-IN', { month: 'short', day: '2-digit', year: 'numeric' })}`
     : new Date(invoice.date).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
 
-  const senderName = profile?.name || 'Tilak Popat';
-  const upiId = profile?.upiId || 'tilakpopat2007-1@okaxis';
+  const senderName = profile?.name || 'Video Editor';
+  const upiId = profile?.upiId || '';
 
   const invoiceNo = `INV-${invoice.id.substring(0, 8).toUpperCase()}`;
   const subject = `Invoice ${invoiceNo} - ${client.name} (${monthCycleStr})`;

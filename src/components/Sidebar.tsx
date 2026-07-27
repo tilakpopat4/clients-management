@@ -33,7 +33,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, profi
           </div>
         </div>
         <div className="pt-2.5 border-t border-slate-800/60">
-          <p className="text-xs font-semibold text-slate-200 truncate">{profile?.name || user?.displayName || 'Tilak Popat'}</p>
+          <p className="text-xs font-semibold text-slate-200 truncate">{profile?.name || user?.displayName || user?.email?.split('@')[0] || 'Video Editor'}</p>
           <p className="text-[11px] text-slate-400 truncate">{profile?.professionalTitle || 'Video Editor Pro'}</p>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, CheckCircle, Clock, Edit2 } from 'lucide-react';
+import { Plus, Trash2, CheckCircle, Clock, Edit2, ArrowUpDown } from 'lucide-react';
 import { useFirestore } from '../hooks/useFirestore';
 import { Client, WorkItem } from '../types';
 import clsx from 'clsx';
@@ -17,6 +17,7 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingWorkId, setEditingWorkId] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [formData, setFormData] = useState({
     clientId: '',
     description: '',
@@ -175,7 +176,11 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
     return <div className="p-8 flex justify-center items-center h-full"><p className="text-slate-500">Loading work logs...</p></div>;
   }
 
-  const sortedWork = [...workItems].sort((a, b) => b.date - a.date);
+  const sortedWork = [...workItems].sort((a, b) => 
+    sortOrder === 'asc' 
+      ? (a.date - b.date || a.createdAt - b.createdAt) 
+      : (b.date - a.date || b.createdAt - a.createdAt)
+  );
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
@@ -184,15 +189,25 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
           <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Work Log</h2>
           <p className="text-slate-500 mt-1">Log completed edits and services before generating invoices.</p>
         </div>
-        {!isFormOpen && (
-          <button 
-            onClick={() => setIsFormOpen(true)}
-            className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors shadow-sm w-full md:w-auto"
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <button
+            onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-semibold transition-colors cursor-pointer"
+            title="Toggle sort order"
           >
-            <Plus size={16} />
-            Log Work
+            <ArrowUpDown size={14} />
+            Sort: {sortOrder === 'asc' ? 'Ascending (Oldest First)' : 'Descending (Newest First)'}
           </button>
-        )}
+          {!isFormOpen && (
+            <button 
+              onClick={() => setIsFormOpen(true)}
+              className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors shadow-sm cursor-pointer"
+            >
+              <Plus size={16} />
+              Log Work
+            </button>
+          )}
+        </div>
       </div>
 
       {isFormOpen && (

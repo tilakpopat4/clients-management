@@ -30,10 +30,10 @@ export default function ProfileModal({
 
   useEffect(() => {
     if (isOpen) {
-      setName(initialProfile?.name || user.displayName || 'Tilak Popat');
-      setPhone(initialProfile?.phone || '+91 78749 03810');
-      setUpiId(initialProfile?.upiId || 'tilakpopat2007-1@okaxis');
-      setProfessionalTitle(initialProfile?.professionalTitle || 'Video Editor Pro');
+      setName(initialProfile?.name || user.displayName || '');
+      setPhone(initialProfile?.phone || '');
+      setUpiId(initialProfile?.upiId || '');
+      setProfessionalTitle(initialProfile?.professionalTitle || 'Video Editor');
       setServicesDescription(initialProfile?.servicesDescription || 'Video Editing Services');
       setError('');
     }
@@ -118,7 +118,7 @@ export default function ProfileModal({
             <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wider">Your Full Name *</label>
             <input 
               type="text"
-              placeholder="e.g. Tilak Popat"
+              placeholder="e.g. John Doe"
               className="w-full border border-slate-200 rounded-lg px-3.5 py-2 text-sm bg-slate-50 outline-none transition-all focus:border-indigo-500 focus:bg-white"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -130,7 +130,7 @@ export default function ProfileModal({
             <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wider">Professional Title *</label>
             <input 
               type="text"
-              placeholder="e.g. Video Editor Pro"
+              placeholder="e.g. Video Editor"
               className="w-full border border-slate-200 rounded-lg px-3.5 py-2 text-sm bg-slate-50 outline-none transition-all focus:border-indigo-500 focus:bg-white"
               value={professionalTitle}
               onChange={(e) => setProfessionalTitle(e.target.value)}
@@ -154,7 +154,7 @@ export default function ProfileModal({
             <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wider">Phone Number *</label>
             <input 
               type="text"
-              placeholder="e.g. +91 78749 03810"
+              placeholder="e.g. +91 98765 43210"
               className="w-full border border-slate-200 rounded-lg px-3.5 py-2 text-sm bg-slate-50 outline-none transition-all focus:border-indigo-500 focus:bg-white"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
@@ -166,7 +166,7 @@ export default function ProfileModal({
             <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wider">UPI ID (for pay link & QR Code) *</label>
             <input 
               type="text"
-              placeholder="e.g. username@okaxis"
+              placeholder="e.g. name@upi"
               className="w-full border border-slate-200 rounded-lg px-3.5 py-2 text-sm bg-slate-50 outline-none transition-all focus:border-indigo-500 focus:bg-white font-mono"
               value={upiId}
               onChange={(e) => setUpiId(e.target.value)}
