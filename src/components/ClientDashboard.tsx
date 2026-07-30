@@ -797,8 +797,14 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
 
       {/* Update Payment Date Modal */}
       {isUpdatingPaymentDate && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-5 animate-in fade-in zoom-in-95">
+        <div 
+          onClick={() => setIsUpdatingPaymentDate(false)}
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-5 animate-in fade-in zoom-in-95 cursor-default"
+          >
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="text-lg font-bold text-slate-900">Update Previous Payment Date</h3>
               <button 

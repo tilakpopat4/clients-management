@@ -15,6 +15,8 @@ export const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, "ai-studio-freelancevideoed-719c6223-ef27-451a-b661-b552901cdc1f");
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.addScope('https://www.googleapis.com/auth/gmail.send');
+googleProvider.addScope('https://www.googleapis.com/auth/gmail.compose');
 
 export async function testFirestoreConnection() {
   try {

@@ -77,10 +77,15 @@ export default function ProfileModal({
   };
 
   return (
-    <div id="profile-modal-overlay" className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div 
+      id="profile-modal-overlay" 
+      onClick={() => { if (!isMandatory && onClose) onClose(); }}
+      className={`fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 ${!isMandatory ? 'cursor-pointer' : ''}`}
+    >
       <div 
         id="profile-modal-container" 
-        className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200 cursor-default"
       >
         {/* Header */}
         <div className="bg-slate-900 text-white p-5 flex items-center justify-between">

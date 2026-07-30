@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Client, Reel, Invoice, WorkItem, UserProfile } from '../types';
-import { Plus, Trash2, Download, Receipt, FileCheck, Mail, Send, Copy, X, Check, MailCheck } from 'lucide-react';
+import { Plus, Trash2, Download, Receipt, FileCheck, Mail, Send, Copy, X, Check, MailCheck, CheckCircle2, AlertCircle, Loader2, FileText } from 'lucide-react';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 import { useFirestore } from '../hooks/useFirestore';
@@ -9,6 +9,7 @@ import { generateUUID } from '../lib/utils';
 import { generateInvoiceEmailDetails } from '../lib/paymentUtils';
 import Logo from './Logo';
 import QRCode from 'qrcode';
+import { sendEmailWithPdfAttachment, acquireGmailAccessToken } from '../lib/gmailService';
 
 // Helper functions to parse and convert oklch colors to standard rgb/rgba,
 // which prevents crashes in html2canvas (used by html2pdf.js) under Tailwind CSS v4.
@@ -118,6 +119,7 @@ export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
   const [discountAmount, setDiscountAmount] = useState<string>('');
   const [discountDescription, setDiscountDescription] = useState<string>('');
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+  const [isSendingGmail, setIsSendingGmail] = useState(false);
   const [emailModalData, setEmailModalData] = useState<{
     isOpen: boolean;
     clientName: string;
@@ -128,6 +130,9 @@ export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
     monthCycleStr: string;
     invoiceNo: string;
     totalAmount: number;
+    pdfBlob?: Blob;
+    pdfFilename?: string;
+    gmailStatus?: { sending: boolean; success?: boolean; error?: string; messageId?: string };
   } | null>(null);
 
   const selectedClient = clients.find(c => c.id === selectedClientId);
@@ -302,8 +307,23 @@ export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
       }
     };
 
-    html2pdfFunc().set(opt).from(element).save().then(async () => {
-      // Restore original inline styles immediately
+    const worker = html2pdfFunc().set(opt).from(element);
+
+    worker.output('blob').then(async (pdfBlob: Blob) => {
+      // Trigger browser download of PDF
+      try {
+        const downloadUrl = URL.createObjectURL(pdfBlob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = opt.filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } catch (e) {
+        console.warn("Blob download fallback:", e);
+        await worker.save();
+      }
+
       restoreStyles();
 
       // Save invoice to cloud storage
@@ -342,24 +362,47 @@ export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
         // Generate email details for this specific month cycle's invoice
         const emailDetails = generateInvoiceEmailDetails(selectedClient, newInvoice, profile, dateFrom, dateTo);
 
-        // Auto-launch default email client via mailto link
-        try {
-          window.location.href = emailDetails.mailtoLink;
-        } catch (e) {
-          console.warn("Could not auto-redirect to mailto:", e);
+        const targetClientEmail = selectedClient.email ? selectedClient.email.trim() : '';
+        let initialGmailStatus: { sending: boolean; success?: boolean; error?: string; messageId?: string } = { sending: false };
+
+        if (targetClientEmail) {
+          initialGmailStatus = { sending: true };
+          // Attempt background send via Gmail API
+          sendEmailWithPdfAttachment({
+            to: targetClientEmail,
+            subject: emailDetails.subject,
+            bodyText: emailDetails.body,
+            pdfBlob: pdfBlob,
+            pdfFilename: opt.filename
+          }).then(res => {
+            if (res.success) {
+              setEmailModalData(prev => prev ? {
+                ...prev,
+                gmailStatus: { sending: false, success: true, messageId: res.id }
+              } : null);
+            } else {
+              setEmailModalData(prev => prev ? {
+                ...prev,
+                gmailStatus: { sending: false, success: false, error: res.error }
+              } : null);
+            }
+          });
         }
 
         // Display modal with invoice email details and action buttons
         setEmailModalData({
           isOpen: true,
           clientName: selectedClient.name,
-          clientEmail: selectedClient.email || '',
+          clientEmail: targetClientEmail,
           subject: emailDetails.subject,
           body: emailDetails.body,
           mailtoLink: emailDetails.mailtoLink,
           monthCycleStr: emailDetails.monthCycleStr,
           invoiceNo: emailDetails.invoiceNo,
-          totalAmount: grandTotal
+          totalAmount: grandTotal,
+          pdfBlob: pdfBlob,
+          pdfFilename: opt.filename,
+          gmailStatus: initialGmailStatus
         });
       } catch (err: any) {
         console.error("Error saving to cloud:", err);
@@ -368,13 +411,55 @@ export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
       setIsGenerating(false);
       
     }).catch((err: any) => {
-      // Restore original inline styles immediately
       restoreStyles();
-
       console.error(err);
       setIsGenerating(false);
       alert("An error occurred while generating the PDF: " + (err?.message || String(err)));
     });
+  };
+
+  const handleSendGmailManual = async () => {
+    if (!emailModalData) return;
+    const recipient = emailModalData.clientEmail.trim();
+    if (!recipient) {
+      alert("Please enter a recipient email address.");
+      return;
+    }
+
+    setIsSendingGmail(true);
+    setEmailModalData(prev => prev ? { ...prev, gmailStatus: { sending: true } } : null);
+
+    try {
+      const token = await acquireGmailAccessToken();
+      const res = await sendEmailWithPdfAttachment({
+        to: recipient,
+        subject: emailModalData.subject,
+        bodyText: emailModalData.body,
+        pdfBlob: emailModalData.pdfBlob,
+        pdfFilename: emailModalData.pdfFilename || `Invoice_${emailModalData.invoiceNo}.pdf`,
+        accessToken: token
+      });
+
+      if (res.success) {
+        setEmailModalData(prev => prev ? {
+          ...prev,
+          gmailStatus: { sending: false, success: true, messageId: res.id }
+        } : null);
+      } else {
+        setEmailModalData(prev => prev ? {
+          ...prev,
+          gmailStatus: { sending: false, success: false, error: res.error }
+        } : null);
+      }
+    } catch (err: any) {
+      console.error("Gmail manual send error:", err);
+      setEmailModalData(prev => prev ? {
+        ...prev,
+        gmailStatus: { sending: false, success: false, error: err?.message || String(err) }
+      } : null);
+    } finally {
+      setIsSendingGmail(false);
+    }
   };
 
   if (clientsLoading) {
@@ -841,12 +926,35 @@ export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
                       </td>
                       <td className="p-3.5 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => {
+                              const pdfFilename = `Invoice_${clientObj.name.replace(/\s+/g, '_')}_${inv.id.substring(0, 8)}.pdf`;
+                              setEmailModalData({
+                                isOpen: true,
+                                clientName: inv.clientName,
+                                clientEmail: clientObj.email || '',
+                                subject: emailDetails.subject,
+                                body: emailDetails.body,
+                                mailtoLink: emailDetails.mailtoLink,
+                                monthCycleStr: emailDetails.monthCycleStr,
+                                invoiceNo: inv.id.substring(0, 8).toUpperCase(),
+                                totalAmount: inv.totalAmount,
+                                pdfFilename: pdfFilename,
+                                gmailStatus: { sending: false }
+                              });
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs"
+                            title="Send Invoice PDF via Gmail"
+                          >
+                            <Mail size={13} /> Send via Gmail
+                          </button>
+
                           <a
                             href={emailDetails.mailtoLink}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs"
-                            title="Draft / Send Email for this Invoice"
+                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors"
+                            title="Open Default Mail App"
                           >
-                            <Mail size={13} /> Send Email
+                            <Send size={13} />
                           </a>
 
                           <button
@@ -872,16 +980,22 @@ export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
 
       {/* Email Sent / Prepared Modal */}
       {emailModalData && emailModalData.isOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-5 my-8 max-h-[90vh] overflow-y-auto">
+        <div 
+          onClick={() => setEmailModalData(null)}
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in cursor-pointer"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-5 my-8 max-h-[90vh] overflow-y-auto cursor-default"
+          >
             <div className="flex items-start justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-3">
-                <div className="p-3 bg-emerald-100 text-emerald-700 rounded-xl">
+                <div className="p-3 bg-indigo-100 text-indigo-700 rounded-xl">
                   <MailCheck size={24} />
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    Invoice Email Ready for {emailModalData.clientName}
+                    Invoice Email & Gmail Delivery for {emailModalData.clientName}
                   </h3>
                   <p className="text-xs text-slate-500">
                     Cycle: <span className="font-semibold text-slate-700">{emailModalData.monthCycleStr}</span> • Amount: <span className="font-bold text-emerald-600">₹{emailModalData.totalAmount.toLocaleString('en-IN')}</span>
@@ -897,26 +1011,85 @@ export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
               </button>
             </div>
 
-            <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-1">
-              <p className="font-bold flex items-center gap-1.5">
-                📬 Email Client Triggered Automatically
-              </p>
-              <p className="text-[11px] leading-relaxed text-amber-800">
-                Your default mail app (Gmail / Outlook / Apple Mail) should open with the pre-filled invoice details. If it didn't launch automatically, click <strong>"Open Mail App"</strong> or copy the pre-formatted text below.
-              </p>
-            </div>
+            {/* Gmail Live Status Banner */}
+            {emailModalData.gmailStatus?.sending ? (
+              <div className="p-3.5 bg-indigo-50 border border-indigo-200 rounded-xl text-xs text-indigo-900 flex items-center gap-2.5 font-medium">
+                <Loader2 size={16} className="animate-spin text-indigo-600 shrink-0" />
+                <span>Sending Invoice PDF directly to <strong>{emailModalData.clientEmail || 'client'}</strong> via Gmail API...</span>
+              </div>
+            ) : emailModalData.gmailStatus?.success ? (
+              <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <CheckCircle2 className="text-emerald-600 w-5 h-5 shrink-0" />
+                  <div>
+                    <p className="font-bold">Invoice PDF successfully sent via Gmail!</p>
+                    <p className="text-[11px] text-emerald-700">Delivered to <strong>{emailModalData.clientEmail}</strong> with PDF attached.</p>
+                  </div>
+                </div>
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-mono font-bold px-2 py-0.5 rounded">Gmail API</span>
+              </div>
+            ) : (
+              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-1">
+                <div className="flex items-center justify-between">
+                  <p className="font-bold text-amber-900 flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" /> Gmail Automatic Delivery Status:
+                  </p>
+                  {emailModalData.gmailStatus?.error && (
+                    <span className="text-[10px] text-rose-600 font-mono font-semibold max-w-xs truncate" title={emailModalData.gmailStatus.error}>
+                      {emailModalData.gmailStatus.error}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] leading-relaxed text-amber-800">
+                  {emailModalData.clientEmail 
+                    ? "Click 'Send Invoice PDF via Gmail' below to authorize Gmail and send the attached PDF directly to your client." 
+                    : "Please enter your client's email address below, then click 'Send Invoice PDF via Gmail'."}
+                </p>
+              </div>
+            )}
 
             <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-700">Client Email Address *</label>
+                  <input
+                    type="email"
+                    value={emailModalData.clientEmail}
+                    onChange={e => setEmailModalData({ ...emailModalData, clientEmail: e.target.value })}
+                    placeholder="client@example.com"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-800 outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                {emailModalData.pdfFilename && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-700">Attached Document</label>
+                    <div className="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between text-xs font-mono text-slate-700 h-[38px]">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <FileText size={14} className="text-rose-500 shrink-0" />
+                        <span className="truncate">{emailModalData.pdfFilename}</span>
+                      </div>
+                      <span className="text-[10px] px-1.5 py-0.5 bg-rose-50 text-rose-700 font-semibold rounded shrink-0">
+                        PDF
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-700">Email Subject</label>
-                <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono font-medium text-slate-800">
-                  {emailModalData.subject}
-                </div>
+                <input
+                  type="text"
+                  value={emailModalData.subject}
+                  onChange={e => setEmailModalData({ ...emailModalData, subject: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-800 outline-none focus:border-indigo-500"
+                />
               </div>
 
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-slate-700">Detailed Invoice Email Content</label>
+                  <label className="text-xs font-semibold text-slate-700">Email Message Body</label>
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(`Subject: ${emailModalData.subject}\n\n${emailModalData.body}`);
@@ -924,18 +1097,21 @@ export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
                     }}
                     className="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1"
                   >
-                    <Copy size={12} /> Copy Email Body
+                    <Copy size={12} /> Copy Text
                   </button>
                 </div>
-                <pre className="p-3.5 bg-slate-900 text-slate-100 rounded-xl text-xs font-mono leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto">
-                  {emailModalData.body}
-                </pre>
+                <textarea
+                  rows={6}
+                  value={emailModalData.body}
+                  onChange={e => setEmailModalData({ ...emailModalData, body: e.target.value })}
+                  className="w-full p-3.5 bg-slate-900 text-slate-100 rounded-xl text-xs font-mono leading-relaxed outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
+                />
               </div>
             </div>
 
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-100">
               <span className="text-xs text-slate-400">
-                To: <strong className="text-slate-700">{emailModalData.clientEmail || 'No email provided'}</strong>
+                Target: <strong className="text-slate-700">{emailModalData.clientEmail || 'No email entered'}</strong>
               </span>
 
               <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -949,10 +1125,30 @@ export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
 
                 <a
                   href={emailModalData.mailtoLink}
-                  className="flex-1 sm:flex-none px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs flex items-center justify-center gap-1.5"
+                  className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                  title="Open Default Mail App"
                 >
-                  <Mail size={14} /> Open Mail App
+                  <Send size={15} />
                 </a>
+
+                <button
+                  type="button"
+                  onClick={handleSendGmailManual}
+                  disabled={isSendingGmail || emailModalData.gmailStatus?.sending}
+                  className="flex-1 sm:flex-none px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs flex items-center justify-center gap-2"
+                >
+                  {isSendingGmail || emailModalData.gmailStatus?.sending ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      Sending via Gmail...
+                    </>
+                  ) : (
+                    <>
+                      <Mail size={14} />
+                      Send Invoice PDF via Gmail
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>

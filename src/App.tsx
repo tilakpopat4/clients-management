@@ -11,13 +11,14 @@ import InvoiceTab from './components/InvoiceTab';
 import { WorkLogTab } from './components/WorkLogTab';
 import AdminTab from './components/AdminTab';
 import { auth, googleProvider, db } from './firebase';
-import { signInWithPopup, onAuthStateChanged, User, signOut } from 'firebase/auth';
+import { signInWithPopup, onAuthStateChanged, User, signOut, GoogleAuthProvider } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { useFirestore } from './hooks/useFirestore';
 import { UserProfile } from './types';
 import ProfileModal from './components/ProfileModal';
 import Logo from './components/Logo';
 import { ShieldAlert, LogOut } from 'lucide-react';
+import { setGmailAccessToken } from './lib/gmailService';
 
 export type Tab = 'dashboard' | 'clients' | 'work' | 'invoice' | 'admin';
 
@@ -162,7 +163,11 @@ export default function App() {
 
   const handleLogin = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
+      const res = await signInWithPopup(auth, googleProvider);
+      const credential = GoogleAuthProvider.credentialFromResult(res);
+      if (credential?.accessToken) {
+        setGmailAccessToken(credential.accessToken);
+      }
     } catch (error: any) {
       console.error(error);
       alert(`Sign in failed. This is often because the app is running in a preview window (iframe). Please open the app in a new tab using the arrow icon in the top right, and try again.\n\nError: ${error.message}`);

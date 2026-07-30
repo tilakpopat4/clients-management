@@ -310,8 +310,14 @@ export default function StickyNotesWidget({ user, clients }: StickyNotesWidgetPr
 
       {/* Add/Edit Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-5">
+        <div 
+          onClick={handleCloseModal}
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in cursor-pointer"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-5 cursor-default"
+          >
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <Pin size={18} className="text-indigo-600" />
