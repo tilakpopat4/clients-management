@@ -3,7 +3,7 @@ import { Invoice, WorkItem, Client } from '../types';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell 
 } from 'recharts';
-import { IndianRupee, Clock, TrendingUp, CheckCircle2, DownloadCloud, UploadCloud, AlertTriangle, Send, Users, ArrowRight, Mail, Bell, Copy } from 'lucide-react';
+import { IndianRupee, Clock, TrendingUp, CheckCircle2, DownloadCloud, UploadCloud, AlertTriangle, Send, Users, ArrowRight, Mail, Bell, Copy, Smartphone } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { useFirestore } from '../hooks/useFirestore';
 import { 
@@ -13,6 +13,7 @@ import {
   generateEmailReminder,
   triggerBrowserOverdueAlert
 } from '../lib/paymentUtils';
+import { registerFcmDeviceToken, triggerFcmPaymentReminder } from '../lib/fcmService';
 import StickyNotesWidget from './StickyNotesWidget';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
@@ -29,6 +30,27 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
   const { data: workItems, addOrUpdateItem: updateWorkItem } = useFirestore<WorkItem>('workItems', user?.uid);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [toastAlert, setToastAlert] = useState<{ title: string; body: string; type: 'success' | 'warning' } | null>(null);
+  const [isFcmRegistering, setIsFcmRegistering] = useState(false);
+
+  const handleRegisterFcmDevice = async () => {
+    setIsFcmRegistering(true);
+    try {
+      const res = await registerFcmDeviceToken(user?.uid);
+      if (res.token) {
+        setToastAlert({
+          title: 'FCM Device Registered!',
+          body: 'Firebase Cloud Messaging device token saved. Overdue payment reminders will push directly to this device.',
+          type: 'success'
+        });
+      } else {
+        alert(res.error || 'Failed to register FCM device token.');
+      }
+    } catch (err: any) {
+      alert('Error registering FCM device: ' + (err?.message || String(err)));
+    } finally {
+      setIsFcmRegistering(false);
+    }
+  };
 
   // Client statuses & notifications
   const clientStatuses = useMemo(() => {
@@ -249,25 +271,34 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
               <span>Payment Cycle Reminders ({activeNotifications.length} Client(s) Need Follow-up)</span>
             </div>
             
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={handleRegisterFcmDevice}
+                disabled={isFcmRegistering}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+                title="Register this device for Firebase Cloud Messaging (FCM) push notifications"
+              >
+                <Smartphone size={13} /> {isFcmRegistering ? 'Registering...' : 'Register FCM Device'}
+              </button>
+
               <button
                 onClick={() => {
                   activeNotifications.forEach(({ client, statusInfo }) => {
                     if (client.emailRemindersEnabled !== false) {
-                      triggerBrowserOverdueAlert(client.name, statusInfo.label, statusInfo.notificationMessage);
+                      triggerBrowserOverdueAlert(client.name, statusInfo.label, statusInfo.notificationMessage, user?.uid);
                     }
                   });
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-xs"
-                title="Send browser alerts for all overdue client payments with email reminders active"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-xs cursor-pointer"
+                title="Send FCM device push notifications for all overdue client payment reminders"
               >
-                <Bell size={13} /> Trigger All Browser Alerts
+                <Bell size={13} /> Trigger All FCM Alerts
               </button>
 
               {onNavigateToClients && (
                 <button 
                   onClick={onNavigateToClients}
-                  className="text-xs font-bold text-amber-800 hover:underline flex items-center gap-1"
+                  className="text-xs font-bold text-amber-800 hover:underline flex items-center gap-1 cursor-pointer"
                 >
                   View Directory <ArrowRight size={12} />
                 </button>
@@ -339,9 +370,9 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
                       </button>
 
                       <button
-                        onClick={() => triggerBrowserOverdueAlert(client.name, statusInfo.label, statusInfo.notificationMessage)}
-                        className="p-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold transition-colors"
-                        title="Trigger Browser Alert / Notification"
+                        onClick={() => triggerBrowserOverdueAlert(client.name, statusInfo.label, statusInfo.notificationMessage, user?.uid)}
+                        className="p-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                        title="Trigger FCM Device Notification"
                       >
                         <Bell size={13} />
                       </button>

@@ -272,9 +272,9 @@ export default function ClientsTab({ user }: ClientsTabProps) {
                     </a>
                   )}
                   <button
-                    onClick={() => triggerBrowserOverdueAlert(client.name, statusInfo.label, statusInfo.notificationMessage)}
-                    className="p-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-semibold transition-colors"
-                    title="Trigger Browser Alert / Notification"
+                    onClick={() => triggerBrowserOverdueAlert(client.name, statusInfo.label, statusInfo.notificationMessage, user?.uid)}
+                    className="p-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-semibold transition-colors cursor-pointer"
+                    title="Trigger FCM Device Push Notification"
                   >
                     <AlertTriangle size={12} />
                   </button>

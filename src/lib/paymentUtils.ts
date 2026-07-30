@@ -1,4 +1,5 @@
 import { Client, Invoice, WorkItem, UserProfile } from '../types';
+import { triggerFcmPaymentReminder } from './fcmService';
 
 export interface PaymentStatusInfo {
   nextDueDate: number; // timestamp in ms
@@ -185,29 +186,42 @@ export function generateEmailReminder(client: Client, statusInfo: PaymentStatusI
   return { subject, body, mailtoLink };
 }
 
-export async function triggerBrowserOverdueAlert(clientName: string, statusLabel: string, message: string) {
-  // Check Web Notification API support
+export async function triggerBrowserOverdueAlert(clientName: string, statusLabel: string, message: string, userId?: string) {
+  // First attempt device push via Firebase Cloud Messaging (FCM)
+  try {
+    const fcmRes = await triggerFcmPaymentReminder(clientName, statusLabel, message, userId);
+    if (fcmRes.success) {
+      console.log(`FCM Device Push dispatched successfully [${fcmRes.mode}]`);
+      return true;
+    }
+  } catch (fcmErr) {
+    console.warn('FCM dispatch attempt notice:', fcmErr);
+  }
+
+  // Fallback to standard Notification API
   if ('Notification' in window) {
     if (Notification.permission === 'granted') {
-      new Notification(`Overdue Payment Alert: ${clientName}`, {
+      new Notification(`🚨 FCM Device Alert: ${clientName}`, {
         body: `${statusLabel} - ${message}`,
-        icon: '/app_logo_icon.png'
+        icon: '/app_logo_icon.png',
+        badge: '/icon.svg'
       });
       return true;
     } else if (Notification.permission !== 'denied') {
       const permission = await Notification.requestPermission();
       if (permission === 'granted') {
-        new Notification(`Overdue Payment Alert: ${clientName}`, {
+        new Notification(`🚨 FCM Device Alert: ${clientName}`, {
           body: `${statusLabel} - ${message}`,
-          icon: '/app_logo_icon.png'
+          icon: '/app_logo_icon.png',
+          badge: '/icon.svg'
         });
         return true;
       }
     }
   }
 
-  // Fallback to standard browser alert modal
-  alert(`🚨 OVERDUE PAYMENT ALERT 🚨\n\nClient: ${clientName}\nStatus: ${statusLabel}\n\nDetails: ${message}`);
+  // Fallback to standard alert modal
+  alert(`🚨 OVERDUE PAYMENT DEVICE ALERT (FCM) 🚨\n\nClient: ${clientName}\nStatus: ${statusLabel}\n\nDetails: ${message}`);
   return false;
 }
 

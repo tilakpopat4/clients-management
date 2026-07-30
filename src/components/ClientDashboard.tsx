@@ -347,11 +347,11 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
               </a>
             )}
             <button
-              onClick={() => triggerBrowserOverdueAlert(client.name, statusInfo.label, statusInfo.notificationMessage)}
-              className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 shadow-sm flex items-center gap-1"
-              title="Trigger browser notification / alert"
+              onClick={() => triggerBrowserOverdueAlert(client.name, statusInfo.label, statusInfo.notificationMessage, user?.uid)}
+              className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 shadow-sm flex items-center gap-1 cursor-pointer"
+              title="Trigger FCM Device Notification"
             >
-              <AlertTriangle size={12} /> Browser Alert
+              <AlertTriangle size={12} /> FCM Device Push
             </button>
           </div>
         </div>
