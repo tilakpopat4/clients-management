@@ -3,7 +3,7 @@ import { Client, Invoice, WorkItem } from '../types';
 import { 
   ArrowLeft, Calendar, Phone, Mail, Edit3, CheckCircle2, Clock, 
   IndianRupee, Plus, AlertTriangle, Send, FileText, ClipboardList,
-  Sparkles, ShieldAlert, DollarSign, Copy
+  Sparkles, ShieldAlert, DollarSign, Copy, ExternalLink, Play
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { useFirestore } from '../hooks/useFirestore';
@@ -15,7 +15,7 @@ import {
   generateInvoiceEmailDetails,
   triggerBrowserOverdueAlert
 } from '../lib/paymentUtils';
-import { generateUUID } from '../lib/utils';
+import { generateUUID, extractVideoUrl } from '../lib/utils';
 
 interface ClientDashboardProps {
   client: Client;
@@ -48,6 +48,7 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
   const [editingWorkId, setEditingWorkId] = useState<string | null>(null);
   const [workFormData, setWorkFormData] = useState({
     description: '',
+    videoUrl: '',
     quantity: '1',
     rate: String(client.defaultRate),
     date: new Date().toISOString().split('T')[0]
@@ -91,6 +92,7 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
     setEditingWorkId(item.id);
     setWorkFormData({
       description: item.description,
+      videoUrl: item.videoUrl || '',
       quantity: String(item.quantity),
       rate: String(item.rate),
       date: new Date(item.date).toISOString().split('T')[0]
@@ -102,6 +104,7 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
     setEditingWorkId(null);
     setWorkFormData({
       description: '',
+      videoUrl: '',
       quantity: '1',
       rate: String(client.defaultRate),
       date: new Date().toISOString().split('T')[0]
@@ -116,6 +119,7 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
       const selectedRate = Number(workFormData.rate) || client.defaultRate;
       const selectedQty = Number(workFormData.quantity);
       const selectedDate = new Date(workFormData.date).getTime();
+      const trimmedVideoUrl = workFormData.videoUrl.trim() || undefined;
 
       if (editingWorkId) {
         const existing = workItems.find(w => w.id === editingWorkId);
@@ -123,6 +127,7 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
           const updatedWork: WorkItem = {
             ...existing,
             description: workFormData.description,
+            videoUrl: trimmedVideoUrl,
             quantity: selectedQty,
             rate: selectedRate,
             date: selectedDate
@@ -165,6 +170,7 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
           id: generateUUID(),
           clientId: client.id,
           description: workFormData.description,
+          videoUrl: trimmedVideoUrl,
           quantity: selectedQty,
           rate: selectedRate,
           date: selectedDate,
@@ -484,6 +490,17 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
                     />
                   </div>
 
+                  <div className="md:col-span-2 space-y-1">
+                    <label className="text-xs font-medium text-slate-600">Video / Post Link (Optional)</label>
+                    <input
+                      type="text"
+                      placeholder="https://instagram.com/reel/... or YouTube / Drive link"
+                      value={workFormData.videoUrl}
+                      onChange={e => setWorkFormData({ ...workFormData, videoUrl: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded px-3 py-2 text-sm outline-none focus:border-indigo-500 font-mono"
+                    />
+                  </div>
+
                   <div className="space-y-1">
                     <label className="text-xs font-medium text-slate-600">Quantity *</label>
                     <input
@@ -544,7 +561,7 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                     <th className="p-3.5">Date</th>
-                    <th className="p-3.5">Description</th>
+                    <th className="p-3.5">Description / Link</th>
                     <th className="p-3.5 text-right">Quantity & Rate</th>
                     <th className="p-3.5 text-right">Total</th>
                     <th className="p-3.5 text-center">Status</th>
@@ -559,45 +576,75 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
                       </td>
                     </tr>
                   ) : (
-                    clientWorkItems.map(item => (
-                      <tr key={item.id} className="hover:bg-slate-50/50">
-                        <td className="p-3.5 text-slate-600">
-                          {new Date(item.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                        </td>
-                        <td className="p-3.5 font-medium text-slate-900">{item.description}</td>
-                        <td className="p-3.5 text-right text-slate-600">
-                          {item.quantity} × ₹{item.rate.toLocaleString('en-IN')}
-                        </td>
-                        <td className="p-3.5 text-right font-bold text-slate-900">
-                          ₹{(item.quantity * item.rate).toLocaleString('en-IN')}
-                        </td>
-                        <td className="p-3.5 text-center">
-                          {item.status === 'Invoiced' ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              <CheckCircle2 size={12} /> Invoiced
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                              <Clock size={12} /> Uninvoiced
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-3.5 text-right space-x-2">
-                          <button
-                            onClick={() => handleStartEditWork(item)}
-                            className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteWork(item.id)}
-                            className="text-xs text-rose-500 hover:text-rose-700 font-semibold"
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                    clientWorkItems.map(item => {
+                      const videoUrl = extractVideoUrl(item);
+                      return (
+                        <tr key={item.id} className="hover:bg-slate-50/50">
+                          <td className="p-3.5 text-slate-600">
+                            {new Date(item.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </td>
+                          <td className="p-3.5">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
+                              <span className="font-medium text-slate-900">{item.description}</span>
+                              {videoUrl && (
+                                <a
+                                  href={videoUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition-all cursor-pointer shrink-0 w-fit"
+                                  title={`Open video/post: ${videoUrl}`}
+                                >
+                                  <Play size={10} className="fill-indigo-700" /> Open Video/Post <ExternalLink size={10} />
+                                </a>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-3.5 text-right text-slate-600">
+                            {item.quantity} × ₹{item.rate.toLocaleString('en-IN')}
+                          </td>
+                          <td className="p-3.5 text-right font-bold text-slate-900">
+                            ₹{(item.quantity * item.rate).toLocaleString('en-IN')}
+                          </td>
+                          <td className="p-3.5 text-center">
+                            {item.status === 'Invoiced' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <CheckCircle2 size={12} /> Invoiced
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                <Clock size={12} /> Uninvoiced
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3.5 text-right space-x-2">
+                            {videoUrl && (
+                              <a
+                                href={videoUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold inline-flex items-center gap-0.5 mr-2"
+                                title="Open video/post in new tab"
+                              >
+                                <ExternalLink size={12} /> Open
+                              </a>
+                            )}
+                            <button
+                              onClick={() => handleStartEditWork(item)}
+                              className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteWork(item.id)}
+                              className="text-xs text-rose-500 hover:text-rose-700 font-semibold"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

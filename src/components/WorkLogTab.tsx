@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, CheckCircle, Clock, Edit2, ArrowUpDown } from 'lucide-react';
+import { Plus, Trash2, CheckCircle, Clock, Edit2, ArrowUpDown, ExternalLink, Play, Video } from 'lucide-react';
 import { useFirestore } from '../hooks/useFirestore';
 import { Client, WorkItem } from '../types';
 import clsx from 'clsx';
 import { User } from 'firebase/auth';
-import { generateUUID } from '../lib/utils';
+import { generateUUID, extractVideoUrl } from '../lib/utils';
 
 interface WorkLogTabProps {
   user: User;
@@ -21,6 +21,7 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
   const [formData, setFormData] = useState({
     clientId: '',
     description: '',
+    videoUrl: '',
     quantity: '1',
     rate: '',
     date: new Date().toISOString().split('T')[0]
@@ -31,6 +32,7 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
     setFormData({
       clientId: work.clientId,
       description: work.description,
+      videoUrl: work.videoUrl || '',
       quantity: String(work.quantity),
       rate: String(work.rate),
       date: new Date(work.date).toISOString().split('T')[0]
@@ -43,6 +45,7 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
     setFormData({
       clientId: '',
       description: '',
+      videoUrl: '',
       quantity: '1',
       rate: '',
       date: new Date().toISOString().split('T')[0]
@@ -58,6 +61,7 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
     const selectedRate = Number(formData.rate) || (client ? client.defaultRate : 0);
     const selectedDate = new Date(formData.date).getTime();
     const selectedQty = Number(formData.quantity);
+    const trimmedVideoUrl = formData.videoUrl.trim() || undefined;
 
     try {
       if (editingWorkId) {
@@ -67,6 +71,7 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
             ...existing,
             clientId: formData.clientId,
             description: formData.description,
+            videoUrl: trimmedVideoUrl,
             quantity: selectedQty,
             rate: selectedRate,
             date: selectedDate
@@ -109,6 +114,7 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
           id: generateUUID(),
           clientId: formData.clientId,
           description: formData.description,
+          videoUrl: trimmedVideoUrl,
           quantity: selectedQty,
           rate: selectedRate,
           date: selectedDate,
@@ -259,6 +265,17 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
                 placeholder="Description of work"
               />
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Video / Post Link (Optional)</label>
+              <input 
+                type="text"
+                className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm font-mono"
+                value={formData.videoUrl}
+                onChange={(e) => setFormData({...formData, videoUrl: e.target.value})}
+                placeholder="https://instagram.com/reel/... or YouTube / Google Drive link"
+              />
+            </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -317,7 +334,7 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
                   <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Client</th>
-                  <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Description</th>
+                  <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Description / Video Link</th>
                   <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Amount</th>
                   <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                   <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>
@@ -326,6 +343,7 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
               <tbody className="divide-y divide-slate-100">
                 {sortedWork.map(work => {
                   const client = clients.find(c => c.id === work.clientId);
+                  const videoUrl = extractVideoUrl(work);
                   return (
                     <tr key={work.id} className="hover:bg-slate-50 transition-colors">
                       <td className="py-4 px-4 text-sm text-slate-600">
@@ -335,7 +353,22 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
                         {client?.name || 'Unknown Client'}
                       </td>
                       <td className="py-4 px-4 text-sm text-slate-600">
-                        {work.description} <span className="text-xs text-slate-400">({work.quantity}x)</span>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
+                          <span className="font-medium text-slate-900">{work.description}</span>
+                          <span className="text-xs text-slate-400">({work.quantity}x)</span>
+                          {videoUrl && (
+                            <a
+                              href={videoUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-900 border border-indigo-200 transition-all shrink-0 cursor-pointer w-fit"
+                              title={`Open video/post: ${videoUrl}`}
+                            >
+                              <Play size={11} className="fill-indigo-700" /> Open Video/Post <ExternalLink size={10} />
+                            </a>
+                          )}
+                        </div>
                       </td>
                       <td className="py-4 px-4 text-sm font-medium text-slate-900">
                         ₹{(work.quantity * work.rate).toLocaleString('en-IN')}
@@ -352,6 +385,17 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
                         )}
                       </td>
                       <td className="py-4 px-4 text-sm text-right flex justify-end items-center gap-1">
+                        {videoUrl && (
+                          <a
+                            href={videoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                            title="Directly Open Video / Post in new tab"
+                          >
+                            <ExternalLink size={16} />
+                          </a>
+                        )}
                         <button 
                           onClick={() => handleEditWork(work)}
                           className="text-slate-500 hover:text-indigo-600 p-1.5 rounded hover:bg-slate-100 transition-colors"

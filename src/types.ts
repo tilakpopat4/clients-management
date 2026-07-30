@@ -29,6 +29,7 @@ export interface WorkItem {
   date: number;
   status: 'Uninvoiced' | 'Invoiced';
   invoiceId?: string;
+  videoUrl?: string;
   createdAt: number;
 }
 
