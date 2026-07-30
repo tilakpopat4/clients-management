@@ -438,12 +438,30 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
     setEmailModalData(prev => prev ? { ...prev, gmailStatus: { sending: true } } : null);
 
     try {
+      let currentPdfBlob = emailModalData.pdfBlob;
+      if (!currentPdfBlob) {
+        const element = document.getElementById('invoice-preview-container');
+        if (element) {
+          try {
+            currentPdfBlob = await html2pdf().set({
+              margin: [10, 10, 10, 10],
+              filename: emailModalData.pdfFilename || `Invoice_${emailModalData.invoiceNo}.pdf`,
+              image: { type: 'jpeg', quality: 0.98 },
+              html2canvas: { scale: 2, useCORS: true, logging: false },
+              jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            }).from(element).output('blob');
+          } catch (e) {
+            console.warn("Could not generate on-the-fly PDF blob:", e);
+          }
+        }
+      }
+
       const token = await acquireGmailAccessToken();
       const res = await sendEmailWithPdfAttachment({
         to: recipient,
         subject: emailModalData.subject,
         bodyText: emailModalData.body,
-        pdfBlob: emailModalData.pdfBlob,
+        pdfBlob: currentPdfBlob,
         pdfFilename: emailModalData.pdfFilename || `Invoice_${emailModalData.invoiceNo}.pdf`,
         accessToken: token
       });
@@ -1106,15 +1124,39 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
 
                 {emailModalData.pdfFilename && (
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-700">Attached Document</label>
+                    <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                      <span>Attached Document</span>
+                      <span className="text-[10px] text-emerald-600 font-semibold">✓ Included in Gmail Send</span>
+                    </label>
                     <div className="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-between text-xs font-mono text-slate-700 h-[38px]">
-                      <div className="flex items-center gap-1.5 truncate">
+                      <div className="flex items-center gap-1.5 truncate pr-2">
                         <FileText size={14} className="text-rose-500 shrink-0" />
                         <span className="truncate">{emailModalData.pdfFilename}</span>
                       </div>
-                      <span className="text-[10px] px-1.5 py-0.5 bg-rose-50 text-rose-700 font-semibold rounded shrink-0">
-                        PDF
-                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {emailModalData.pdfBlob && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (emailModalData.pdfBlob) {
+                                const url = URL.createObjectURL(emailModalData.pdfBlob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = emailModalData.pdfFilename || 'Invoice.pdf';
+                                a.click();
+                                URL.revokeObjectURL(url);
+                              }
+                            }}
+                            className="px-2 py-0.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-sans text-[11px] font-semibold rounded transition-colors flex items-center gap-1 cursor-pointer"
+                            title="Download Invoice PDF file"
+                          >
+                            <Download size={12} className="text-indigo-600" /> Save PDF
+                          </button>
+                        )}
+                        <span className="text-[10px] px-1.5 py-0.5 bg-rose-50 text-rose-700 font-semibold rounded">
+                          PDF
+                        </span>
+                      </div>
                     </div>
                   </div>
                 )}
