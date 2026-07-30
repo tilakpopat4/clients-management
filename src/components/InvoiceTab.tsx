@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Client, Reel, Invoice, WorkItem, UserProfile } from '../types';
-import { Plus, Trash2, Download, Receipt, FileCheck, Mail, Send, Copy, X, Check, MailCheck, CheckCircle2, AlertCircle, Loader2, FileText } from 'lucide-react';
+import { Plus, Trash2, Download, Receipt, FileCheck, Mail, Send, Copy, X, Check, MailCheck, CheckCircle2, AlertCircle, Loader2, FileText, Search } from 'lucide-react';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 import { useFirestore } from '../hooks/useFirestore';
@@ -94,14 +94,22 @@ function replaceOklchWithRgb(str: string): string {
 interface InvoiceTabProps {
   user: User | null;
   profile: UserProfile | null;
+  initialSearchQuery?: string;
 }
 
-export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
+export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: InvoiceTabProps) {
   const { data: clients, loading: clientsLoading, addOrUpdateItem: updateClient } = useFirestore<Client>('clients', user?.uid);
   const { data: invoices, addOrUpdateItem: addInvoice } = useFirestore<Invoice>('invoices', user?.uid);
   const { data: workItems, addOrUpdateItem: updateWorkItem } = useFirestore<WorkItem>('workItems', user?.uid);
   
   const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const [invoiceSearchQuery, setInvoiceSearchQuery] = useState<string>(initialSearchQuery);
+
+  useEffect(() => {
+    if (initialSearchQuery !== undefined) {
+      setInvoiceSearchQuery(initialSearchQuery);
+    }
+  }, [initialSearchQuery]);
   const [dateFrom, setDateFrom] = useState<string>(() => {
     const d = new Date();
     const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -835,7 +843,7 @@ export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
 
       {/* Invoice History & Email Actions Section */}
       <div className="mt-12 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div>
             <h3 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
               <Receipt size={20} className="text-indigo-600" />
@@ -845,9 +853,32 @@ export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
               View generated cycle invoices and resend email notifications with itemized work details.
             </p>
           </div>
-          <span className="text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full border border-slate-200 self-start sm:self-auto">
-            {invoices.length} Total Invoices
-          </span>
+
+          <div className="flex items-center gap-3">
+            {/* Local Invoice Search Bar */}
+            <div className="relative w-full md:w-64">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={invoiceSearchQuery}
+                onChange={(e) => setInvoiceSearchQuery(e.target.value)}
+                placeholder="Filter invoices or client..."
+                className="w-full bg-slate-50 text-xs pl-8 pr-7 py-1.5 rounded-lg border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-slate-800"
+              />
+              {invoiceSearchQuery && (
+                <button
+                  onClick={() => setInvoiceSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+
+            <span className="text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full border border-slate-200 shrink-0">
+              {invoices.length} Invoices
+            </span>
+          </div>
         </div>
 
         {invoices.length === 0 ? (
@@ -869,7 +900,19 @@ export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
-                {invoices.slice().sort((a, b) => b.date - a.date).map((inv) => {
+                {invoices
+                  .filter(inv => {
+                    if (!invoiceSearchQuery.trim()) return true;
+                    const q = invoiceSearchQuery.toLowerCase().trim();
+                    const invNo = inv.id.substring(0, 8).toLowerCase();
+                    const itemsText = inv.reels ? inv.reels.map(r => r.title).join(' ').toLowerCase() : '';
+                    return inv.clientName.toLowerCase().includes(q) ||
+                      invNo.includes(q) ||
+                      itemsText.includes(q);
+                  })
+                  .slice()
+                  .sort((a, b) => b.date - a.date)
+                  .map((inv) => {
                   const clientObj = clients.find(c => c.id === inv.clientId) || {
                     id: inv.clientId,
                     name: inv.clientName,

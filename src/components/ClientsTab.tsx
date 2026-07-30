@@ -19,19 +19,33 @@ import ClientDashboard from './ClientDashboard';
 
 interface ClientsTabProps {
   user: User | null;
+  initialSearchQuery?: string;
+  initialSelectedClientId?: string | null;
 }
 
-export default function ClientsTab({ user }: ClientsTabProps) {
+export default function ClientsTab({ user, initialSearchQuery = '', initialSelectedClientId = null }: ClientsTabProps) {
   const { data: clients, loading: clientsLoading, addOrUpdateItem: saveClient, removeItem: deleteClientFromDb } = useFirestore<Client>('clients', user?.uid);
   const { data: invoices } = useFirestore<Invoice>('invoices', user?.uid);
   const { data: workItems } = useFirestore<WorkItem>('workItems', user?.uid);
 
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(initialSelectedClientId);
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [filterType, setFilterType] = useState<'all' | 'due' | 'uptodate'>('all');
+
+  React.useEffect(() => {
+    if (initialSearchQuery !== undefined) {
+      setSearchQuery(initialSearchQuery);
+    }
+  }, [initialSearchQuery]);
+
+  React.useEffect(() => {
+    if (initialSelectedClientId) {
+      setSelectedClientId(initialSelectedClientId);
+    }
+  }, [initialSelectedClientId]);
 
   const [formData, setFormData] = useState({
     name: '',

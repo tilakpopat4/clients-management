@@ -10,6 +10,7 @@ import ClientsTab from './components/ClientsTab';
 import InvoiceTab from './components/InvoiceTab';
 import { WorkLogTab } from './components/WorkLogTab';
 import AdminTab from './components/AdminTab';
+import GlobalHeader from './components/GlobalHeader';
 import { auth, googleProvider, db } from './firebase';
 import { signInWithPopup, onAuthStateChanged, User, signOut, GoogleAuthProvider } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -28,6 +29,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [isBlocked, setIsBlocked] = useState<boolean | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+  const [selectedClientIdFromSearch, setSelectedClientIdFromSearch] = useState<string | null>(null);
   const checkIsAdminRoute = () => {
     return (
       window.location.pathname === '/admin' ||
@@ -163,6 +166,8 @@ export default function App() {
 
   const handleLogin = async () => {
     try {
+      googleProvider.addScope('https://www.googleapis.com/auth/gmail.send');
+      googleProvider.addScope('https://www.googleapis.com/auth/gmail.compose');
       const res = await signInWithPopup(auth, googleProvider);
       const credential = GoogleAuthProvider.credentialFromResult(res);
       if (credential?.accessToken) {
@@ -281,12 +286,35 @@ export default function App() {
         profile={profile}
         onEditProfile={() => setIsProfileModalOpen(true)}
       />
-      <main className="flex-1 overflow-y-auto relative pb-20 md:pb-0">
-        {activeTab === 'dashboard' && <DashboardTab user={user} onNavigateToClients={() => setActiveTab('clients')} />}
-        {activeTab === 'clients' && <ClientsTab user={user} />}
-        {activeTab === 'work' && <WorkLogTab user={user} />}
-        {activeTab === 'invoice' && <InvoiceTab user={user} profile={profile} />}
-        {activeTab === 'admin' && <AdminTab />}
+      <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative pb-20 md:pb-0">
+        <GlobalHeader
+          user={user}
+          activeTab={activeTab}
+          setActiveTab={(tab, query) => {
+            if (query !== undefined) setGlobalSearchQuery(query);
+            setActiveTab(tab);
+          }}
+          onSearchSelect={(type, id, query) => {
+            if (query !== undefined) setGlobalSearchQuery(query);
+            if (type === 'client') {
+              setSelectedClientIdFromSearch(id);
+              setActiveTab('clients');
+            } else if (type === 'work') {
+              setActiveTab('work');
+            } else if (type === 'invoice') {
+              setActiveTab('invoice');
+            }
+          }}
+          globalQuery={globalSearchQuery}
+          setGlobalQuery={setGlobalSearchQuery}
+        />
+        <div className="flex-1 overflow-y-auto">
+          {activeTab === 'dashboard' && <DashboardTab user={user} onNavigateToClients={() => setActiveTab('clients')} />}
+          {activeTab === 'clients' && <ClientsTab user={user} initialSearchQuery={globalSearchQuery} initialSelectedClientId={selectedClientIdFromSearch} />}
+          {activeTab === 'work' && <WorkLogTab user={user} initialSearchQuery={globalSearchQuery} />}
+          {activeTab === 'invoice' && <InvoiceTab user={user} profile={profile} initialSearchQuery={globalSearchQuery} />}
+          {activeTab === 'admin' && <AdminTab />}
+        </div>
       </main>
 
       {user && (

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Plus, Trash2, CheckCircle, Clock, Edit2, ArrowUpDown, ExternalLink, Play, Video } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Trash2, CheckCircle, Clock, Edit2, ArrowUpDown, ExternalLink, Play, Video, Search, X } from 'lucide-react';
 import { useFirestore } from '../hooks/useFirestore';
 import { Client, WorkItem } from '../types';
 import clsx from 'clsx';
@@ -8,9 +8,10 @@ import { generateUUID, extractVideoUrl } from '../lib/utils';
 
 interface WorkLogTabProps {
   user: User;
+  initialSearchQuery?: string;
 }
 
-export function WorkLogTab({ user }: WorkLogTabProps) {
+export function WorkLogTab({ user, initialSearchQuery = '' }: WorkLogTabProps) {
   const { data: clients, loading: clientsLoading } = useFirestore<Client>('clients', user.uid);
   const { data: workItems, loading: workLoading, addOrUpdateItem, removeItem } = useFirestore<WorkItem>('workItems', user.uid);
   const { data: invoices, loading: invoicesLoading, addOrUpdateItem: addOrUpdateInvoice, removeItem: removeInvoice } = useFirestore<any>('invoices', user.uid);
@@ -18,6 +19,13 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingWorkId, setEditingWorkId] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
+
+  useEffect(() => {
+    if (initialSearchQuery !== undefined) {
+      setSearchQuery(initialSearchQuery);
+    }
+  }, [initialSearchQuery]);
   const [formData, setFormData] = useState({
     clientId: '',
     description: '',
@@ -182,7 +190,17 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
     return <div className="p-8 flex justify-center items-center h-full"><p className="text-slate-500">Loading work logs...</p></div>;
   }
 
-  const sortedWork = [...workItems].sort((a, b) => 
+  const filteredWork = workItems.filter(w => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    const client = clients.find(c => c.id === w.clientId);
+    const clientName = client ? client.name.toLowerCase() : '';
+    return w.description.toLowerCase().includes(q) ||
+      clientName.includes(q) ||
+      (w.videoUrl && w.videoUrl.toLowerCase().includes(q));
+  });
+
+  const sortedWork = [...filteredWork].sort((a, b) => 
     sortOrder === 'asc' 
       ? (a.date - b.date || a.createdAt - b.createdAt) 
       : (b.date - a.date || b.createdAt - a.createdAt)
@@ -195,21 +213,41 @@ export function WorkLogTab({ user }: WorkLogTabProps) {
           <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Work Log</h2>
           <p className="text-slate-500 mt-1">Log completed edits and services before generating invoices.</p>
         </div>
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          {/* Work Log Filter Search Bar */}
+          <div className="relative flex-1 md:w-64">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search work or client..."
+              className="w-full bg-white text-xs pl-9 pr-7 py-2 rounded-lg border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-slate-800"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
           <button
             onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-semibold transition-colors cursor-pointer"
+            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer shrink-0"
             title="Toggle sort order"
           >
             <ArrowUpDown size={14} />
-            Sort: {sortOrder === 'asc' ? 'Ascending (Oldest First)' : 'Descending (Newest First)'}
+            Sort: {sortOrder === 'asc' ? 'Oldest First' : 'Newest First'}
           </button>
           {!isFormOpen && (
             <button 
               onClick={() => setIsFormOpen(true)}
-              className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors shadow-sm cursor-pointer"
+              className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-xs font-semibold transition-colors shadow-xs cursor-pointer shrink-0"
             >
-              <Plus size={16} />
+              <Plus size={15} />
               Log Work
             </button>
           )}

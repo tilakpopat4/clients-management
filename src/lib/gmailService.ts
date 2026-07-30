@@ -1,5 +1,5 @@
 import { auth, googleProvider } from '../firebase';
-import { signInWithPopup } from 'firebase/auth';
+import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 
 let cachedGmailAccessToken: string | null = null;
 
@@ -26,17 +26,20 @@ export async function acquireGmailAccessToken(forcePrompt = false): Promise<stri
     googleProvider.addScope('https://www.googleapis.com/auth/gmail.compose');
 
     const result = await signInWithPopup(auth, googleProvider);
-    const credential = (result as any).credential;
+    const credential = GoogleAuthProvider.credentialFromResult(result);
     const token = credential?.accessToken;
 
     if (!token) {
-      throw new Error('Google OAuth sign-in did not return an access token for Gmail.');
+      throw new Error('Google OAuth sign-in did not return an access token for Gmail. Please try signing in again.');
     }
 
     cachedGmailAccessToken = token;
     return token;
   } catch (err: any) {
     console.error("Failed to acquire Gmail token via OAuth popup:", err);
+    if (err?.code === 'auth/popup-blocked' || err?.message?.includes('popup')) {
+      throw new Error('Google OAuth popup was blocked. If you are in an iframe preview, please open the app in a new browser tab to send emails via Gmail.');
+    }
     throw err;
   }
 }
@@ -83,7 +86,14 @@ export async function sendEmailWithPdfAttachment(params: SendEmailParams): Promi
   try {
     let token = params.accessToken || cachedGmailAccessToken;
     if (!token) {
-      token = await acquireGmailAccessToken();
+      try {
+        token = await acquireGmailAccessToken();
+      } catch (authErr: any) {
+        return {
+          success: false,
+          error: authErr?.message || "Gmail authorization required. Click 'Send Invoice PDF via Gmail' to authorize."
+        };
+      }
     }
 
     let rawMimeString = '';
