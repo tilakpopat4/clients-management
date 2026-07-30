@@ -42,6 +42,7 @@ export interface Invoice {
   status: 'Pending' | 'Paid';
   discountAmount?: number;
   discountDescription?: string;
+  lastPaymentDate?: number;
 }
 
 export interface UserProfile {

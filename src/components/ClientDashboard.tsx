@@ -34,11 +34,14 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
   // Payment Date update state
   const [isUpdatingPaymentDate, setIsUpdatingPaymentDate] = useState(false);
   const [newPaymentDate, setNewPaymentDate] = useState<string>(
-    client.lastPaymentDate 
-      ? new Date(client.lastPaymentDate).toISOString().split('T')[0] 
-      : new Date().toISOString().split('T')[0]
+    new Date().toISOString().split('T')[0]
   );
   const [markPendingAsPaid, setMarkPendingAsPaid] = useState(true);
+
+  const openPaymentModal = () => {
+    setNewPaymentDate(new Date().toISOString().split('T')[0]);
+    setIsUpdatingPaymentDate(true);
+  };
 
   // New Work Log modal state inside client dashboard
   const [isWorkFormOpen, setIsWorkFormOpen] = useState(false);
@@ -212,7 +215,7 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
           </button>
           
           <button
-            onClick={() => setIsUpdatingPaymentDate(true)}
+            onClick={openPaymentModal}
             className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-all shadow-sm"
           >
             <Calendar size={14} /> Update Payment Date
@@ -322,7 +325,7 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
 
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
             <button
-              onClick={() => setIsUpdatingPaymentDate(true)}
+              onClick={openPaymentModal}
               className="px-3 py-1.5 bg-white border border-current rounded-lg text-xs font-bold hover:opacity-90 shadow-sm"
             >
               Record Payment
@@ -364,7 +367,7 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
           </div>
           <div className="text-xl font-bold text-slate-900">{formattedLastPaymentDate}</div>
           <button 
-            onClick={() => setIsUpdatingPaymentDate(true)}
+            onClick={openPaymentModal}
             className="text-xs text-indigo-600 font-semibold hover:underline"
           >
             Change date
@@ -650,13 +653,24 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
                             ₹{inv.totalAmount.toLocaleString('en-IN')}
                           </td>
                           <td className="p-3.5 text-center">
-                            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border ${
-                              inv.status === 'Paid' 
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                                : 'bg-amber-50 text-amber-700 border-amber-200'
-                            }`}>
+                            <button
+                              onClick={async () => {
+                                const newStatus = inv.status === 'Paid' ? 'Pending' : 'Paid';
+                                await updateInvoice({ ...inv, status: newStatus });
+                                if (newStatus === 'Paid') {
+                                  const pDate = inv.date || Date.now();
+                                  await updateClient({ ...client, lastPaymentDate: pDate });
+                                }
+                              }}
+                              className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border cursor-pointer transition-transform hover:scale-105 ${
+                                inv.status === 'Paid' 
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' 
+                                  : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                              }`}
+                              title={`Click to mark as ${inv.status === 'Paid' ? 'Pending' : 'Paid & update last payment date'}`}
+                            >
                               {inv.status}
-                            </span>
+                            </button>
                           </td>
                           <td className="p-3.5 text-right">
                             <div className="flex items-center justify-end gap-1.5">

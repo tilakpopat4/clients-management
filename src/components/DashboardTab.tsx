@@ -23,7 +23,7 @@ interface DashboardTabProps {
 }
 
 export default function DashboardTab({ user, onNavigateToClients }: DashboardTabProps) {
-  const { data: clients } = useFirestore<Client>('clients', user?.uid);
+  const { data: clients, addOrUpdateItem: updateClient } = useFirestore<Client>('clients', user?.uid);
   const { data: invoices, loading, addOrUpdateItem, removeItem, batchReplaceAll } = useFirestore<Invoice>('invoices', user?.uid);
   const { batchReplaceAll: batchReplaceClients } = useFirestore<any>('clients', user?.uid);
   const { data: workItems, addOrUpdateItem: updateWorkItem } = useFirestore<WorkItem>('workItems', user?.uid);
@@ -82,7 +82,15 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
   const toggleInvoiceStatus = async (id: string) => {
     const inv = invoices.find(i => i.id === id);
     if (inv) {
-      await addOrUpdateItem({ ...inv, status: inv.status === 'Paid' ? 'Pending' : 'Paid' });
+      const nextStatus = inv.status === 'Paid' ? 'Pending' : 'Paid';
+      await addOrUpdateItem({ ...inv, status: nextStatus });
+      if (nextStatus === 'Paid') {
+        const clientObj = clients.find(c => c.id === inv.clientId || c.name === inv.clientName);
+        if (clientObj) {
+          const pDate = inv.date || Date.now();
+          await updateClient({ ...clientObj, lastPaymentDate: pDate });
+        }
+      }
     }
   };
 

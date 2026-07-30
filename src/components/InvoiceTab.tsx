@@ -96,7 +96,7 @@ interface InvoiceTabProps {
 }
 
 export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
-  const { data: clients, loading: clientsLoading } = useFirestore<Client>('clients', user?.uid);
+  const { data: clients, loading: clientsLoading, addOrUpdateItem: updateClient } = useFirestore<Client>('clients', user?.uid);
   const { data: invoices, addOrUpdateItem: addInvoice } = useFirestore<Invoice>('invoices', user?.uid);
   const { data: workItems, addOrUpdateItem: updateWorkItem } = useFirestore<WorkItem>('workItems', user?.uid);
   
@@ -315,6 +315,7 @@ export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
         reels: [...reels],
         totalAmount: grandTotal,
         status: 'Pending',
+        ...(selectedClient.lastPaymentDate ? { lastPaymentDate: selectedClient.lastPaymentDate } : {}),
         ...(discount > 0 ? {
           discountAmount: discount,
           discountDescription: discountDescription.trim() || 'Discount/Deduction'
@@ -636,13 +637,21 @@ export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
                   )}
                 </div>
                 <div className="w-1/2 text-right">
-                  <div className="mb-3 text-lg flex justify-end items-center gap-4">
+                  <div className="mb-2 text-lg flex justify-end items-center gap-4">
                     <span className="font-bold text-slate-400 uppercase tracking-widest text-sm">Date</span> 
                     <span className="font-semibold text-slate-900">{new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
                   </div>
-                  <div className="text-lg flex justify-end items-center gap-4">
+                  <div className="mb-2 text-lg flex justify-end items-center gap-4">
                     <span className="font-bold text-slate-400 uppercase tracking-widest text-sm">Invoice No</span> 
                     <span className="font-semibold text-slate-900">#INV-{String(invoices.length + 1).padStart(4, '0')}</span>
+                  </div>
+                  <div className="text-lg flex justify-end items-center gap-4">
+                    <span className="font-bold text-slate-400 uppercase tracking-widest text-sm">Last Payment Date</span> 
+                    <span className="font-semibold text-slate-900">
+                      {selectedClient?.lastPaymentDate 
+                        ? new Date(selectedClient.lastPaymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) 
+                        : 'N/A'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -702,9 +711,17 @@ export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
                 <div className="max-w-[60%]">
                   <h3 className="text-sm font-bold mb-4 uppercase tracking-widest text-slate-500">Payment Details</h3>
                   <div className="space-y-3 text-lg text-slate-900">
-                    <p className="flex items-center gap-3"><span className="font-bold w-24 text-slate-600">Method</span> UPI Transfer</p>
-                    <p className="flex items-center gap-3"><span className="font-bold w-24 text-slate-600">UPI ID</span> <span className="font-mono bg-slate-100 px-2 py-1 rounded text-base">{profile?.upiId || 'Not specified'}</span></p>
-                    <p className="flex items-center gap-3"><span className="font-bold w-24 text-slate-600">Name</span> {profile?.name || user?.displayName || 'Video Editor'}</p>
+                    <p className="flex items-center gap-3"><span className="font-bold w-40 text-slate-600">Method</span> UPI Transfer</p>
+                    <p className="flex items-center gap-3"><span className="font-bold w-40 text-slate-600">UPI ID</span> <span className="font-mono bg-slate-100 px-2 py-1 rounded text-base">{profile?.upiId || 'Not specified'}</span></p>
+                    <p className="flex items-center gap-3"><span className="font-bold w-40 text-slate-600">Name</span> {profile?.name || user?.displayName || 'Video Editor'}</p>
+                    <p className="flex items-center gap-3">
+                      <span className="font-bold w-40 text-slate-600">Last Payment Date</span> 
+                      <span className="font-semibold text-slate-800">
+                        {selectedClient?.lastPaymentDate 
+                          ? new Date(selectedClient.lastPaymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) 
+                          : 'N/A (First Cycle)'}
+                      </span>
+                    </p>
                   </div>
                   <div className="mt-8 text-sm italic text-slate-500 leading-relaxed max-w-md">
                     Thank you for your business! Please process the payment within 7 days of receiving this invoice.
@@ -803,13 +820,24 @@ export default function InvoiceTab({ user, profile }: InvoiceTabProps) {
                         ₹{inv.totalAmount.toLocaleString('en-IN')}
                       </td>
                       <td className="p-3.5 text-center">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
-                          inv.status === 'Paid'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : 'bg-amber-50 text-amber-700 border-amber-200'
-                        }`}>
+                        <button
+                          onClick={async () => {
+                            const newStatus = inv.status === 'Paid' ? 'Pending' : 'Paid';
+                            await addInvoice({ ...inv, status: newStatus });
+                            if (newStatus === 'Paid' && clientObj.id) {
+                              const pDate = inv.date || Date.now();
+                              await updateClient({ ...clientObj, lastPaymentDate: pDate });
+                            }
+                          }}
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border cursor-pointer transition-transform hover:scale-105 ${
+                            inv.status === 'Paid'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                              : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                          }`}
+                          title={`Click to mark as ${inv.status === 'Paid' ? 'Pending' : 'Paid & update last payment date'}`}
+                        >
                           {inv.status}
-                        </span>
+                        </button>
                       </td>
                       <td className="p-3.5 text-right">
                         <div className="flex items-center justify-end gap-1.5">
