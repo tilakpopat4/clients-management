@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Client, Invoice, WorkItem } from '../types';
+import { Client, Invoice, WorkItem, SubClient } from '../types';
 import { 
   ArrowLeft, Calendar, Phone, Mail, Edit3, CheckCircle2, Clock, 
   IndianRupee, Plus, AlertTriangle, Send, FileText, ClipboardList,
-  Sparkles, ShieldAlert, DollarSign, Copy, ExternalLink, Play, Download
+  Sparkles, ShieldAlert, DollarSign, Copy, ExternalLink, Play, Download,
+  Users, Tag, Trash2, Edit2, Filter
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { useFirestore } from '../hooks/useFirestore';
@@ -44,10 +45,71 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
     setIsUpdatingPaymentDate(true);
   };
 
+  // Sub-Client management state
+  const [isSubClientsModalOpen, setIsSubClientsModalOpen] = useState(false);
+  const [editingSubClientId, setEditingSubClientId] = useState<string | null>(null);
+  const [subClientForm, setSubClientForm] = useState({ name: '', code: '', notes: '' });
+  const [subClientFilter, setSubClientFilter] = useState<'all' | 'direct' | string>('all');
+
+  const handleSaveSubClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!subClientForm.name.trim()) return alert("Please enter a sub-client name.");
+
+    const existingSubs = client.subClients || [];
+    let updatedSubs: SubClient[];
+
+    if (editingSubClientId) {
+      updatedSubs = existingSubs.map(sc => 
+        sc.id === editingSubClientId 
+          ? { ...sc, name: subClientForm.name.trim(), code: subClientForm.code.trim() || undefined, notes: subClientForm.notes.trim() || undefined }
+          : sc
+      );
+    } else {
+      const newSub: SubClient = {
+        id: generateUUID(),
+        name: subClientForm.name.trim(),
+        code: subClientForm.code.trim() || undefined,
+        notes: subClientForm.notes.trim() || undefined,
+        createdAt: Date.now()
+      };
+      updatedSubs = [...existingSubs, newSub];
+    }
+
+    try {
+      await updateClient({ ...client, subClients: updatedSubs });
+      setSubClientForm({ name: '', code: '', notes: '' });
+      setEditingSubClientId(null);
+    } catch (err: any) {
+      console.error(err);
+      alert("Error saving sub-client: " + (err?.message || String(err)));
+    }
+  };
+
+  const handleEditSubClientClick = (sc: SubClient) => {
+    setEditingSubClientId(sc.id);
+    setSubClientForm({
+      name: sc.name,
+      code: sc.code || '',
+      notes: sc.notes || ''
+    });
+  };
+
+  const handleDeleteSubClientClick = async (subId: string, subName: string) => {
+    if (confirm(`Are you sure you want to delete sub-client "${subName}"? Work items assigned to this sub-client will remain recorded.`)) {
+      const updatedSubs = (client.subClients || []).filter(sc => sc.id !== subId);
+      await updateClient({ ...client, subClients: updatedSubs });
+      if (editingSubClientId === subId) {
+        setEditingSubClientId(null);
+        setSubClientForm({ name: '', code: '', notes: '' });
+      }
+    }
+  };
+
   // New Work Log modal state inside client dashboard
   const [isWorkFormOpen, setIsWorkFormOpen] = useState(false);
   const [editingWorkId, setEditingWorkId] = useState<string | null>(null);
   const [workFormData, setWorkFormData] = useState({
+    subClientId: '',
     description: '',
     videoUrl: '',
     quantity: '1',
@@ -61,6 +123,13 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
   
   const financials = calculateClientFinancials(client.id, invoices, workItems);
   const statusInfo = getPaymentStatusInfo(client, invoices, workItems);
+
+  // Filter work items based on selected subclient tab/filter
+  const filteredClientWorkItems = clientWorkItems.filter(item => {
+    if (subClientFilter === 'all') return true;
+    if (subClientFilter === 'direct') return !item.subClientId;
+    return item.subClientId === subClientFilter;
+  });
 
   // Save new payment date
   const handleSavePaymentDate = async (e: React.FormEvent) => {
@@ -92,6 +161,7 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
   const handleStartEditWork = (item: WorkItem) => {
     setEditingWorkId(item.id);
     setWorkFormData({
+      subClientId: item.subClientId || '',
       description: item.description,
       videoUrl: item.videoUrl || '',
       quantity: String(item.quantity),
@@ -104,6 +174,7 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
   const handleCancelWorkForm = () => {
     setEditingWorkId(null);
     setWorkFormData({
+      subClientId: '',
       description: '',
       videoUrl: '',
       quantity: '1',
@@ -122,11 +193,18 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
       const selectedDate = new Date(workFormData.date).getTime();
       const trimmedVideoUrl = workFormData.videoUrl.trim() || undefined;
 
+      // Find subclient details if selected
+      const selectedSub = (client.subClients || []).find(sc => sc.id === workFormData.subClientId);
+      const subClientId = selectedSub ? selectedSub.id : undefined;
+      const subClientName = selectedSub ? selectedSub.name : undefined;
+
       if (editingWorkId) {
         const existing = workItems.find(w => w.id === editingWorkId);
         if (existing) {
           const updatedWork: WorkItem = {
             ...existing,
+            subClientId,
+            subClientName,
             description: workFormData.description,
             videoUrl: trimmedVideoUrl,
             quantity: selectedQty,
@@ -146,7 +224,9 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
                     ...reel,
                     title: workFormData.description,
                     quantity: selectedQty,
-                    rate: selectedRate
+                    rate: selectedRate,
+                    subClientId,
+                    subClientName
                   };
                 }
                 return reel;
@@ -170,6 +250,8 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
         const newWork: WorkItem = {
           id: generateUUID(),
           clientId: client.id,
+          subClientId,
+          subClientName,
           description: workFormData.description,
           videoUrl: trimmedVideoUrl,
           quantity: selectedQty,
@@ -213,7 +295,15 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
           Back to Client Directory
         </button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setIsSubClientsModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 rounded-lg text-xs font-semibold transition-all shadow-sm cursor-pointer"
+            title="Add or edit sub-clients for this client"
+          >
+            <Users size={14} /> Sub-Clients {client.subClients && client.subClients.length > 0 ? `(${client.subClients.length})` : ''}
+          </button>
+
           <button
             onClick={() => onEditClient(client)}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold transition-all shadow-sm"
@@ -487,6 +577,35 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
                 </div>
 
                 <form onSubmit={handleSaveWorkLog} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  {client.subClients && client.subClients.length > 0 && (
+                    <div className="md:col-span-4 bg-purple-50/70 p-3 rounded-xl border border-purple-200">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <label className="text-xs font-bold text-purple-900 flex items-center gap-1">
+                          <Users size={14} className="text-purple-600" /> Issued Sub-Client (Optional)
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setIsSubClientsModalOpen(true)}
+                          className="text-xs font-semibold text-purple-700 hover:text-purple-900 underline flex items-center gap-1 w-fit"
+                        >
+                          + Manage Sub-Clients
+                        </button>
+                      </div>
+                      <select
+                        value={workFormData.subClientId}
+                        onChange={e => setWorkFormData({ ...workFormData, subClientId: e.target.value })}
+                        className="mt-1.5 w-full bg-white border border-purple-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-purple-500"
+                      >
+                        <option value="">-- Direct Parent Client ({client.name}) --</option>
+                        {client.subClients.map(sc => (
+                          <option key={sc.id} value={sc.id}>
+                            Sub-Client: {sc.name} {sc.code ? `(${sc.code})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   <div className="md:col-span-2 space-y-1">
                     <label className="text-xs font-medium text-slate-600">Work Description *</label>
                     <input
@@ -564,13 +683,58 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
               </div>
             )}
 
+            {/* Sub-Client Filter Tabs if sub-clients exist */}
+            {client.subClients && client.subClients.length > 0 && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                <span className="text-xs font-bold text-slate-500 flex items-center gap-1 shrink-0">
+                  <Filter size={12} /> Filter Work:
+                </span>
+                <button
+                  onClick={() => setSubClientFilter('all')}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-all shrink-0 cursor-pointer ${
+                    subClientFilter === 'all'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  All ({clientWorkItems.length})
+                </button>
+                <button
+                  onClick={() => setSubClientFilter('direct')}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-all shrink-0 cursor-pointer ${
+                    subClientFilter === 'direct'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200'
+                  }`}
+                >
+                  Direct / Parent ({clientWorkItems.filter(i => !i.subClientId).length})
+                </button>
+                {client.subClients.map(sc => {
+                  const count = clientWorkItems.filter(i => i.subClientId === sc.id).length;
+                  return (
+                    <button
+                      key={sc.id}
+                      onClick={() => setSubClientFilter(sc.id)}
+                      className={`px-3 py-1 rounded-full text-xs font-semibold transition-all shrink-0 cursor-pointer ${
+                        subClientFilter === sc.id
+                          ? 'bg-purple-600 text-white shadow-xs'
+                          : 'bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200'
+                      }`}
+                    >
+                      Sub: {sc.name} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Work Items Table */}
             <div className="overflow-x-auto border border-slate-200 rounded-xl">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                     <th className="p-3.5">Date</th>
-                    <th className="p-3.5">Description / Link</th>
+                    <th className="p-3.5">Description / Sub-Client / Link</th>
                     <th className="p-3.5 text-right">Quantity & Rate</th>
                     <th className="p-3.5 text-right">Total</th>
                     <th className="p-3.5 text-center">Status</th>
@@ -578,14 +742,16 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
-                  {clientWorkItems.length === 0 ? (
+                  {filteredClientWorkItems.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="p-8 text-center text-slate-400">
-                        No work items logged for this client yet.
+                        {subClientFilter !== 'all' 
+                          ? 'No work items logged under this selected filter.' 
+                          : 'No work items logged for this client yet.'}
                       </td>
                     </tr>
                   ) : (
-                    clientWorkItems.map(item => {
+                    filteredClientWorkItems.map(item => {
                       const videoUrl = extractVideoUrl(item);
                       return (
                         <tr key={item.id} className="hover:bg-slate-50/50">
@@ -593,8 +759,15 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
                             {new Date(item.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                           </td>
                           <td className="p-3.5">
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
-                              <span className="font-medium text-slate-900">{item.description}</span>
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium text-slate-900">{item.description}</span>
+                                {item.subClientName && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                                    <Users size={10} /> Sub: {item.subClientName}
+                                  </span>
+                                )}
+                              </div>
                               {videoUrl && (
                                 <a
                                   href={videoUrl}
@@ -872,6 +1045,176 @@ export default function ClientDashboard({ client, user, onBack, onEditClient }: 
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Manage Sub-Clients Modal */}
+      {isSubClientsModalOpen && (
+        <div 
+          onClick={() => {
+            setIsSubClientsModalOpen(false);
+            setEditingSubClientId(null);
+            setSubClientForm({ name: '', code: '', notes: '' });
+          }}
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-xl w-full p-6 space-y-6 animate-in fade-in zoom-in-95 cursor-default max-h-[90vh] overflow-y-auto"
+          >
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <Users className="w-5 h-5 text-purple-600" /> Manage Sub-Clients
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Assign sub-clients or branches to <strong className="text-slate-700">{client.name}</strong>.
+                </p>
+              </div>
+              <button 
+                onClick={() => {
+                  setIsSubClientsModalOpen(false);
+                  setEditingSubClientId(null);
+                  setSubClientForm({ name: '', code: '', notes: '' });
+                }}
+                className="text-slate-400 hover:text-slate-600 font-bold p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Form to Add / Edit Sub-Client */}
+            <form onSubmit={handleSaveSubClient} className="bg-purple-50/60 p-4 rounded-xl border border-purple-200 space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-purple-900">
+                {editingSubClientId ? 'Edit Sub-Client' : '+ Create New Sub-Client'}
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Sub-Client Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Branch Alpha, Brand X, Project B"
+                    value={subClientForm.name}
+                    onChange={e => setSubClientForm({ ...subClientForm, name: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Code / Tag (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. BR-01, NYC, DEPT-A"
+                    value={subClientForm.code}
+                    onChange={e => setSubClientForm({ ...subClientForm, code: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-purple-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                {editingSubClientId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingSubClientId(null);
+                      setSubClientForm({ name: '', code: '', notes: '' });
+                    }}
+                    className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-200 rounded-lg"
+                  >
+                    Cancel Edit
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold transition-all shadow-sm flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus size={14} /> {editingSubClientId ? 'Update Sub-Client' : 'Add Sub-Client'}
+                </button>
+              </div>
+            </form>
+
+            {/* List of Sub-Clients */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Registered Sub-Clients ({client.subClients?.length || 0})
+              </h4>
+
+              {(!client.subClients || client.subClients.length === 0) ? (
+                <div className="p-6 text-center bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-400">
+                  No sub-clients added yet for {client.name}. Add sub-clients above to issue work logs specifically for them.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {client.subClients.map(sc => {
+                    const scWorkLogs = clientWorkItems.filter(item => item.subClientId === sc.id);
+                    const totalVal = scWorkLogs.reduce((sum, item) => sum + (item.quantity * item.rate), 0);
+                    const uninvoicedVal = scWorkLogs.filter(item => item.status !== 'Invoiced').reduce((sum, item) => sum + (item.quantity * item.rate), 0);
+
+                    return (
+                      <div 
+                        key={sc.id}
+                        className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-3 hover:bg-purple-50/30 transition-colors"
+                      >
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-900 text-sm">{sc.name}</span>
+                            {sc.code && (
+                              <span className="px-2 py-0.5 bg-slate-200 text-slate-700 rounded font-mono text-[11px] font-semibold">
+                                {sc.code}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-slate-500">
+                            <span>{scWorkLogs.length} work log(s)</span>
+                            <span>•</span>
+                            <span className="font-semibold text-slate-700">Total: ₹{totalVal.toLocaleString('en-IN')}</span>
+                            {uninvoicedVal > 0 && (
+                              <span className="text-amber-700 font-medium bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-[11px]">
+                                ₹{uninvoicedVal.toLocaleString('en-IN')} pending invoice
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => handleEditSubClientClick(sc)}
+                            className="p-1.5 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            title="Edit Sub-Client"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSubClientClick(sc.id, sc.name)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            title="Delete Sub-Client"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end border-t border-slate-100 pt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSubClientsModalOpen(false);
+                  setEditingSubClientId(null);
+                  setSubClientForm({ name: '', code: '', notes: '' });
+                }}
+                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow-xs"
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}

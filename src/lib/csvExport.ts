@@ -50,7 +50,7 @@ export function exportClientCSV(client: Client, clientWorkItems: WorkItem[], cli
 
   // 4. Work History Logs
   rows.push(["WORK HISTORY LOGS"].map(escapeCsv).join(","));
-  rows.push(["Log ID", "Date", "Description", "Quantity", "Rate (₹)", "Total Amount (₹)", "Invoiced Status", "Video Link"].map(escapeCsv).join(","));
+  rows.push(["Log ID", "Date", "Sub-Client", "Description", "Quantity", "Rate (₹)", "Total Amount (₹)", "Invoiced Status", "Video Link"].map(escapeCsv).join(","));
   
   if (clientWorkItems.length === 0) {
     rows.push(["No work logs recorded for this client."].map(escapeCsv).join(","));
@@ -61,6 +61,7 @@ export function exportClientCSV(client: Client, clientWorkItems: WorkItem[], cli
       rows.push([
         item.id,
         new Date(item.date).toLocaleDateString('en-IN'),
+        item.subClientName || "General / Direct Client",
         item.description,
         item.quantity,
         item.rate,

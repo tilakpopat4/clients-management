@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, CheckCircle, Clock, Edit2, ArrowUpDown, ExternalLink, Play, Video, Search, X } from 'lucide-react';
+import { Plus, Trash2, CheckCircle, Clock, Edit2, ArrowUpDown, ExternalLink, Play, Video, Search, X, Users } from 'lucide-react';
 import { useFirestore } from '../hooks/useFirestore';
 import { Client, WorkItem } from '../types';
 import clsx from 'clsx';
@@ -28,6 +28,7 @@ export function WorkLogTab({ user, initialSearchQuery = '' }: WorkLogTabProps) {
   }, [initialSearchQuery]);
   const [formData, setFormData] = useState({
     clientId: '',
+    subClientId: '',
     description: '',
     videoUrl: '',
     quantity: '1',
@@ -39,6 +40,7 @@ export function WorkLogTab({ user, initialSearchQuery = '' }: WorkLogTabProps) {
     setEditingWorkId(work.id);
     setFormData({
       clientId: work.clientId,
+      subClientId: work.subClientId || '',
       description: work.description,
       videoUrl: work.videoUrl || '',
       quantity: String(work.quantity),
@@ -52,6 +54,7 @@ export function WorkLogTab({ user, initialSearchQuery = '' }: WorkLogTabProps) {
     setEditingWorkId(null);
     setFormData({
       clientId: '',
+      subClientId: '',
       description: '',
       videoUrl: '',
       quantity: '1',
@@ -66,6 +69,7 @@ export function WorkLogTab({ user, initialSearchQuery = '' }: WorkLogTabProps) {
     if (!formData.clientId) return alert("Please select a client");
     
     const client = clients.find(c => c.id === formData.clientId);
+    const selectedSub = client?.subClients?.find(sc => sc.id === formData.subClientId);
     const selectedRate = Number(formData.rate) || (client ? client.defaultRate : 0);
     const selectedDate = new Date(formData.date).getTime();
     const selectedQty = Number(formData.quantity);
@@ -78,6 +82,8 @@ export function WorkLogTab({ user, initialSearchQuery = '' }: WorkLogTabProps) {
           const updatedWork: WorkItem = {
             ...existing,
             clientId: formData.clientId,
+            subClientId: selectedSub ? selectedSub.id : (formData.subClientId ? formData.subClientId : undefined),
+            subClientName: selectedSub ? selectedSub.name : undefined,
             description: formData.description,
             videoUrl: trimmedVideoUrl,
             quantity: selectedQty,
@@ -97,7 +103,9 @@ export function WorkLogTab({ user, initialSearchQuery = '' }: WorkLogTabProps) {
                     ...reel,
                     title: formData.description,
                     quantity: selectedQty,
-                    rate: selectedRate
+                    rate: selectedRate,
+                    subClientId: selectedSub ? selectedSub.id : undefined,
+                    subClientName: selectedSub ? selectedSub.name : undefined
                   };
                 }
                 return reel;
@@ -121,6 +129,8 @@ export function WorkLogTab({ user, initialSearchQuery = '' }: WorkLogTabProps) {
         const newWork: WorkItem = {
           id: generateUUID(),
           clientId: formData.clientId,
+          subClientId: selectedSub ? selectedSub.id : (formData.subClientId ? formData.subClientId : undefined),
+          subClientName: selectedSub ? selectedSub.name : undefined,
           description: formData.description,
           videoUrl: trimmedVideoUrl,
           quantity: selectedQty,
@@ -271,7 +281,7 @@ export function WorkLogTab({ user, initialSearchQuery = '' }: WorkLogTabProps) {
                   onChange={(e) => {
                     const clientId = e.target.value;
                     const client = clients.find(c => c.id === clientId);
-                    setFormData({...formData, clientId, rate: client ? String(client.defaultRate) : ''});
+                    setFormData({...formData, clientId, subClientId: '', rate: client ? String(client.defaultRate) : ''});
                   }}
                 >
                   <option value="">Select Client</option>
@@ -279,6 +289,30 @@ export function WorkLogTab({ user, initialSearchQuery = '' }: WorkLogTabProps) {
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
+
+                {(() => {
+                  const selClient = clients.find(c => c.id === formData.clientId);
+                  if (selClient?.subClients && selClient.subClients.length > 0) {
+                    return (
+                      <div className="mt-2.5 bg-purple-50 p-2.5 rounded-lg border border-purple-200">
+                        <label className="block text-xs font-bold text-purple-900 mb-1 flex items-center gap-1">
+                          <Users size={12} className="text-purple-600" /> Assign Sub-Client (Optional)
+                        </label>
+                        <select
+                          className="w-full p-2 border border-purple-300 rounded-md text-xs bg-white font-medium text-slate-800 outline-none focus:ring-2 focus:ring-purple-500"
+                          value={formData.subClientId}
+                          onChange={(e) => setFormData({ ...formData, subClientId: e.target.value })}
+                        >
+                          <option value="">Direct Parent Client ({selClient.name})</option>
+                          {selClient.subClients.map(sc => (
+                            <option key={sc.id} value={sc.id}>Sub-Client: {sc.name} {sc.code ? `(${sc.code})` : ''}</option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Date Completed</label>
@@ -388,7 +422,12 @@ export function WorkLogTab({ user, initialSearchQuery = '' }: WorkLogTabProps) {
                         {new Date(work.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
                       </td>
                       <td className="py-4 px-4 text-sm font-medium text-slate-900">
-                        {client?.name || 'Unknown Client'}
+                        <div>{client?.name || 'Unknown Client'}</div>
+                        {work.subClientName && (
+                          <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded mt-0.5">
+                            <Users size={10} /> Sub: {work.subClientName}
+                          </div>
+                        )}
                       </td>
                       <td className="py-4 px-4 text-sm text-slate-600">
                         <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">

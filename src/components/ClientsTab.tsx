@@ -3,7 +3,7 @@ import { Client, Invoice, WorkItem } from '../types';
 import { 
   Plus, Edit2, Trash2, CheckCircle2, X, Search, Calendar, 
   Clock, Phone, Mail, ArrowRight, AlertTriangle, Send, ShieldAlert,
-  ChevronRight, Filter, Download
+  ChevronRight, Filter, Download, Users
 } from 'lucide-react';
 import { useFirestore } from '../hooks/useFirestore';
 import { User } from 'firebase/auth';
@@ -571,11 +571,16 @@ export default function ClientsTab({ user, initialSearchQuery = '', initialSelec
                     </div>
                   </div>
 
-                  {/* Payment Status Pill */}
-                  <div>
+                  {/* Payment Status Pill & Sub-Clients Badge */}
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${statusInfo.badgeClass}`}>
                       <Clock size={12} /> {statusInfo.label}
                     </span>
+                    {client.subClients && client.subClients.length > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                        <Users size={12} /> {client.subClients.length} Sub-Clients
+                      </span>
+                    )}
                   </div>
 
                   {/* 30-Day Cycle Dates Row */}

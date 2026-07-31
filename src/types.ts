@@ -1,3 +1,11 @@
+export interface SubClient {
+  id: string;
+  name: string;
+  code?: string;
+  notes?: string;
+  createdAt?: number;
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -11,6 +19,7 @@ export interface Client {
   emailRemindersEnabled?: boolean; // toggle for overdue payment email reminders
   notes?: string;
   createdAt: number;
+  subClients?: SubClient[]; // List of sub-clients belonging to this client
 }
 
 export interface Reel {
@@ -18,11 +27,15 @@ export interface Reel {
   title: string;
   quantity: number;
   rate: number;
+  subClientId?: string;
+  subClientName?: string;
 }
 
 export interface WorkItem {
   id: string;
   clientId: string;
+  subClientId?: string;
+  subClientName?: string;
   description: string;
   quantity: number;
   rate: number;
