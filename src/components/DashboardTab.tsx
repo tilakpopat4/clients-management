@@ -32,6 +32,7 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
   const [toastAlert, setToastAlert] = useState<{ title: string; body: string; type: 'success' | 'warning' } | null>(null);
   const [isFcmRegistering, setIsFcmRegistering] = useState(false);
   const [isNotificationDismissed, setIsNotificationDismissed] = useState(false);
+  const [chartViewMode, setChartViewMode] = useState<'individual' | 'monthly'>('individual');
 
   const handleRegisterFcmDevice = async () => {
     setIsFcmRegistering(true);
@@ -136,6 +137,38 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
     });
 
     return Array.from(monthMap.values()).sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+  }, [invoices]);
+
+  // Compute individual payment spikes data for line chart
+  const individualPaymentData = useMemo(() => {
+    // Collect all paid invoices (or all invoices with payment events)
+    const paidInvoices = invoices.filter(inv => inv.status === 'Paid');
+    if (paidInvoices.length === 0) return [];
+
+    const sorted = [...paidInvoices].sort((a, b) => {
+      const timeA = a.lastPaymentDate || a.date || 0;
+      const timeB = b.lastPaymentDate || b.date || 0;
+      return timeA - timeB;
+    });
+
+    return sorted.map((inv, idx) => {
+      const t = inv.lastPaymentDate || inv.date || Date.now();
+      const d = new Date(t);
+      const dateLabel = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+      const fullDateStr = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+      
+      return {
+        id: inv.id || `inv-${idx}`,
+        shortLabel: `${dateLabel} (${inv.clientName})`,
+        dateLabel,
+        fullDateStr,
+        amount: Number(inv.totalAmount) || 0,
+        clientName: inv.clientName || 'Client',
+        invoiceId: inv.id,
+        status: inv.status,
+        timestamp: t
+      };
+    });
   }, [invoices]);
 
   const toggleInvoiceStatus = async (id: string) => {
@@ -474,70 +507,171 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
 
       {/* Analytics & Charts Section */}
       <div className="grid lg:grid-cols-3 gap-8">
-        {/* Recharts Monthly Earnings Line Chart */}
+        {/* Recharts Monthly Earnings & Individual Payment Spikes Line Chart */}
         <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 border-b border-slate-100 pb-4">
             <div>
-              <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Monthly Earnings Trend</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Track paid earnings vs total invoiced revenue over time</p>
+              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                {chartViewMode === 'individual' ? (
+                  <>
+                    <TrendingUp size={16} className="text-emerald-600" />
+                    Individual Payment Spikes
+                  </>
+                ) : (
+                  <>
+                    <TrendingUp size={16} className="text-indigo-600" />
+                    Monthly Earnings Trend
+                  </>
+                )}
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {chartViewMode === 'individual'
+                  ? "Shows individual payment amounts plotted when recorded"
+                  : "Track paid earnings vs total invoiced revenue aggregated monthly"}
+              </p>
             </div>
-            <div className="flex items-center gap-4 text-xs">
-              <span className="flex items-center gap-1.5 font-medium text-emerald-700">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Paid Earnings
-              </span>
-              <span className="flex items-center gap-1.5 font-medium text-indigo-600">
-                <span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span> Total Invoiced
-              </span>
+
+            <div className="flex items-center gap-3">
+              <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setChartViewMode('individual')}
+                  className={`px-3 py-1.5 rounded-md font-semibold transition-all cursor-pointer ${
+                    chartViewMode === 'individual'
+                      ? 'bg-white text-emerald-800 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Payment Spikes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartViewMode('monthly')}
+                  className={`px-3 py-1.5 rounded-md font-semibold transition-all cursor-pointer ${
+                    chartViewMode === 'monthly'
+                      ? 'bg-white text-indigo-800 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Monthly Summary
+                </button>
+              </div>
             </div>
           </div>
-          <div className="flex-1 min-h-[280px]">
-            {monthlyTrendData.some(m => m.totalInvoiced > 0 || m.paidEarnings > 0) ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={monthlyTrendData} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis 
-                    dataKey="monthLabel" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fontSize: 12, fill: '#64748b' }} 
-                  />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fontSize: 12, fill: '#64748b' }}
-                    tickFormatter={(val) => `₹${val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val}`}
-                  />
-                  <Tooltip 
-                    contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                    formatter={(value: number, name: string) => [
-                      `₹${Number(value).toLocaleString('en-IN')}`, 
-                      name === 'paidEarnings' ? 'Paid Earnings' : 'Total Invoiced'
-                    ]}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="paidEarnings" 
-                    name="paidEarnings"
-                    stroke="#10b981" 
-                    strokeWidth={3} 
-                    dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#ffffff' }}
-                    activeDot={{ r: 7, strokeWidth: 0 }} 
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="totalInvoiced" 
-                    name="totalInvoiced"
-                    stroke="#6366f1" 
-                    strokeWidth={2} 
-                    strokeDasharray="4 4"
-                    dot={{ r: 3, fill: '#6366f1' }} 
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+
+          <div className="flex-1 min-h-[290px]">
+            {chartViewMode === 'individual' ? (
+              individualPaymentData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={individualPaymentData} margin={{ top: 15, right: 20, left: 10, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis 
+                      dataKey="dateLabel" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 11, fill: '#64748b' }} 
+                    />
+                    <YAxis 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      tickFormatter={(val) => `₹${val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val}`}
+                    />
+                    <Tooltip 
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-slate-900 text-white p-3.5 rounded-xl shadow-xl text-xs space-y-1 border border-slate-700 min-w-[180px]">
+                              <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-1.5 mb-1">
+                                <span className="font-bold text-slate-100 truncate">{data.clientName}</span>
+                                <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 font-bold rounded text-[10px] uppercase shrink-0">
+                                  {data.status || 'Paid'}
+                                </span>
+                              </div>
+                              <div className="flex items-baseline gap-1 text-emerald-400">
+                                <span className="text-[10px] text-slate-400">Payment Spike:</span>
+                                <span className="text-sm font-extrabold">₹{Number(data.amount).toLocaleString('en-IN')}</span>
+                              </div>
+                              <div className="text-slate-400 text-[11px] pt-0.5">
+                                Recorded Date: <span className="text-slate-200 font-medium">{data.fullDateStr}</span>
+                              </div>
+                              {data.invoiceId && (
+                                <div className="text-slate-400 text-[10px] font-mono pt-0.5">
+                                  Invoice ID: #{data.invoiceId.slice(-6).toUpperCase()}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="amount" 
+                      name="Payment Amount"
+                      stroke="#10b981" 
+                      strokeWidth={3} 
+                      dot={{ r: 6, fill: '#10b981', strokeWidth: 2, stroke: '#ffffff' }}
+                      activeDot={{ r: 9, fill: '#059669', strokeWidth: 2, stroke: '#ffffff' }} 
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-sm text-slate-400 text-center py-12">
+                  No recorded payment spikes found.<br/>Mark invoices as Paid to see individual payment spikes here.
+                </div>
+              )
             ) : (
-              <div className="h-full flex items-center justify-center text-sm text-gray-400 text-center py-12">
-                No monthly invoice data yet.<br/>Generate invoices to render the earnings line chart.
-              </div>
+              monthlyTrendData.some(m => m.totalInvoiced > 0 || m.paidEarnings > 0) ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={monthlyTrendData} margin={{ top: 15, right: 20, left: 10, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis 
+                      dataKey="monthLabel" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 12, fill: '#64748b' }} 
+                    />
+                    <YAxis 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 12, fill: '#64748b' }}
+                      tickFormatter={(val) => `₹${val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val}`}
+                    />
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                      formatter={(value: number, name: string) => [
+                        `₹${Number(value).toLocaleString('en-IN')}`, 
+                        name === 'paidEarnings' ? 'Paid Earnings' : 'Total Invoiced'
+                      ]}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="paidEarnings" 
+                      name="paidEarnings"
+                      stroke="#10b981" 
+                      strokeWidth={3} 
+                      dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#ffffff' }}
+                      activeDot={{ r: 7, strokeWidth: 0 }} 
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="totalInvoiced" 
+                      name="totalInvoiced"
+                      stroke="#6366f1" 
+                      strokeWidth={2} 
+                      strokeDasharray="4 4"
+                      dot={{ r: 3, fill: '#6366f1' }} 
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-sm text-slate-400 text-center py-12">
+                  No monthly invoice data yet.<br/>Generate invoices to render the earnings line chart.
+                </div>
+              )
             )}
           </div>
         </div>
