@@ -41,17 +41,28 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   return new Error(JSON.stringify(errInfo));
 }
 
-// Deep clean payload to remove undefined fields which cause Firestore errors
-function sanitizePayload<T>(obj: T): Record<string, any> {
+// Deep clean payload to remove undefined fields recursively (including nested objects & arrays) which cause Firestore errors
+export function sanitizePayload(val: any): any {
+  if (val === undefined) {
+    return null;
+  }
+  if (val === null || typeof val !== 'object') {
+    return val;
+  }
+  if (val instanceof Date) {
+    return val;
+  }
+  if (Array.isArray(val)) {
+    return val
+      .filter((item) => item !== undefined)
+      .map((item) => sanitizePayload(item));
+  }
   const clean: Record<string, any> = {};
-  if (!obj || typeof obj !== 'object') return clean;
-  
-  for (const [key, value] of Object.entries(obj)) {
+  for (const [key, value] of Object.entries(val)) {
     if (value !== undefined) {
-      if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
-        clean[key] = sanitizePayload(value);
-      } else {
-        clean[key] = value;
+      const sanitized = sanitizePayload(value);
+      if (sanitized !== undefined) {
+        clean[key] = sanitized;
       }
     }
   }
