@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Invoice, WorkItem, Client } from '../types';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell 
+  BarChart, Bar, LineChart, Line, Legend, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell 
 } from 'recharts';
-import { IndianRupee, Clock, TrendingUp, CheckCircle2, DownloadCloud, UploadCloud, AlertTriangle, Send, Users, ArrowRight, Mail, Bell, Copy, Smartphone } from 'lucide-react';
+import { IndianRupee, Clock, TrendingUp, CheckCircle2, DownloadCloud, UploadCloud, AlertTriangle, Send, Users, ArrowRight, Mail, Bell, Copy, Smartphone, X } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { useFirestore } from '../hooks/useFirestore';
 import { 
@@ -31,6 +31,7 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [toastAlert, setToastAlert] = useState<{ title: string; body: string; type: 'success' | 'warning' } | null>(null);
   const [isFcmRegistering, setIsFcmRegistering] = useState(false);
+  const [isNotificationDismissed, setIsNotificationDismissed] = useState(false);
 
   const handleRegisterFcmDevice = async () => {
     setIsFcmRegistering(true);
@@ -99,6 +100,42 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
       .sort((a, b) => b.value - a.value);
 
     return { totalEarned, totalDue, totalInvoicesThisMonth, chartData };
+  }, [invoices]);
+
+  // Compute monthly earnings trend for line chart
+  const monthlyTrendData = useMemo(() => {
+    const monthMap = new Map<string, { monthKey: string; monthLabel: string; totalInvoiced: number; paidEarnings: number; pendingAmount: number }>();
+
+    // Seed last 6 calendar months for continuous timeline
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
+      monthMap.set(key, { monthKey: key, monthLabel: label, totalInvoiced: 0, paidEarnings: 0, pendingAmount: 0 });
+    }
+
+    invoices.forEach(inv => {
+      if (!inv.date) return;
+      const invDate = new Date(inv.date);
+      const key = `${invDate.getFullYear()}-${String(invDate.getMonth() + 1).padStart(2, '0')}`;
+      const label = invDate.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
+
+      if (!monthMap.has(key)) {
+        monthMap.set(key, { monthKey: key, monthLabel: label, totalInvoiced: 0, paidEarnings: 0, pendingAmount: 0 });
+      }
+
+      const item = monthMap.get(key)!;
+      const amt = Number(inv.totalAmount) || 0;
+      item.totalInvoiced += amt;
+      if (inv.status === 'Paid') {
+        item.paidEarnings += amt;
+      } else {
+        item.pendingAmount += amt;
+      }
+    });
+
+    return Array.from(monthMap.values()).sort((a, b) => a.monthKey.localeCompare(b.monthKey));
   }, [invoices]);
 
   const toggleInvoiceStatus = async (id: string) => {
@@ -263,9 +300,17 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
 
 
 
-      {activeNotifications.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {!isNotificationDismissed && activeNotifications.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 shadow-sm space-y-4 relative">
+          <button
+            onClick={() => setIsNotificationDismissed(true)}
+            className="absolute top-4 right-4 text-amber-700 hover:text-amber-950 hover:bg-amber-200/60 p-1.5 rounded-lg transition-colors cursor-pointer"
+            title="Dismiss notification"
+            aria-label="Close notification"
+          >
+            <X size={18} />
+          </button>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pr-8">
             <div className="flex items-center gap-2.5 text-amber-900 font-bold text-base">
               <AlertTriangle className="text-amber-600 animate-bounce" size={20} />
               <span>Payment Cycle Reminders ({activeNotifications.length} Client(s) Need Follow-up)</span>
@@ -427,11 +472,80 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
         </div>
       </div>
 
+      {/* Analytics & Charts Section */}
       <div className="grid lg:grid-cols-3 gap-8">
-        {/* Chart Section */}
+        {/* Recharts Monthly Earnings Line Chart */}
+        <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Monthly Earnings Trend</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Track paid earnings vs total invoiced revenue over time</p>
+            </div>
+            <div className="flex items-center gap-4 text-xs">
+              <span className="flex items-center gap-1.5 font-medium text-emerald-700">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Paid Earnings
+              </span>
+              <span className="flex items-center gap-1.5 font-medium text-indigo-600">
+                <span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span> Total Invoiced
+              </span>
+            </div>
+          </div>
+          <div className="flex-1 min-h-[280px]">
+            {monthlyTrendData.some(m => m.totalInvoiced > 0 || m.paidEarnings > 0) ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={monthlyTrendData} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis 
+                    dataKey="monthLabel" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 12, fill: '#64748b' }} 
+                  />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 12, fill: '#64748b' }}
+                    tickFormatter={(val) => `₹${val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val}`}
+                  />
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                    formatter={(value: number, name: string) => [
+                      `₹${Number(value).toLocaleString('en-IN')}`, 
+                      name === 'paidEarnings' ? 'Paid Earnings' : 'Total Invoiced'
+                    ]}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="paidEarnings" 
+                    name="paidEarnings"
+                    stroke="#10b981" 
+                    strokeWidth={3} 
+                    dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#ffffff' }}
+                    activeDot={{ r: 7, strokeWidth: 0 }} 
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="totalInvoiced" 
+                    name="totalInvoiced"
+                    stroke="#6366f1" 
+                    strokeWidth={2} 
+                    strokeDasharray="4 4"
+                    dot={{ r: 3, fill: '#6366f1' }} 
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-sm text-gray-400 text-center py-12">
+                No monthly invoice data yet.<br/>Generate invoices to render the earnings line chart.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Client Distribution Bar Chart */}
         <div className="lg:col-span-1 bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col">
-          <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider mb-6">Monthly Work Distribution</h3>
-          <div className="flex-1 min-h-[300px]">
+          <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider mb-6">Client Revenue</h3>
+          <div className="flex-1 min-h-[280px]">
             {metrics.chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={metrics.chartData} layout="vertical" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
@@ -451,15 +565,16 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-full flex items-center justify-center text-sm text-gray-400 text-center">
+              <div className="h-full flex items-center justify-center text-sm text-gray-400 text-center py-12">
                 No data available for this month.<br/>Generate invoices to see the chart.
               </div>
             )}
           </div>
         </div>
+      </div>
 
-        {/* Recent Invoices Table */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+      {/* Recent Invoices Table */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
           <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-white">
             <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Recent Invoices</h3>
           </div>
@@ -536,7 +651,6 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
             </table>
           </div>
         </div>
-      </div>
 
       {/* Sticky Notes Widget */}
       <StickyNotesWidget user={user} clients={clients} />

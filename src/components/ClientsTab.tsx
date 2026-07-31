@@ -3,11 +3,12 @@ import { Client, Invoice, WorkItem } from '../types';
 import { 
   Plus, Edit2, Trash2, CheckCircle2, X, Search, Calendar, 
   Clock, Phone, Mail, ArrowRight, AlertTriangle, Send, ShieldAlert,
-  ChevronRight, Filter
+  ChevronRight, Filter, Download
 } from 'lucide-react';
 import { useFirestore } from '../hooks/useFirestore';
 import { User } from 'firebase/auth';
 import { generateUUID } from '../lib/utils';
+import { exportClientCSV } from '../lib/csvExport';
 import { 
   getPaymentStatusInfo, 
   calculateClientFinancials, 
@@ -34,6 +35,7 @@ export default function ClientsTab({ user, initialSearchQuery = '', initialSelec
   
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [filterType, setFilterType] = useState<'all' | 'due' | 'uptodate'>('all');
+  const [isNotificationDismissed, setIsNotificationDismissed] = useState(false);
 
   React.useEffect(() => {
     if (initialSearchQuery !== undefined) {
@@ -227,15 +229,25 @@ export default function ClientsTab({ user, initialSearchQuery = '', initialSelec
       </div>
 
       {/* Global Payment Reminders Bar across clients (if any client has payment due or delayed) */}
-      {notificationClients.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 shadow-sm space-y-3">
-          <div className="flex items-center justify-between">
+      {!isNotificationDismissed && notificationClients.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 shadow-sm space-y-3 relative">
+          <div className="flex items-center justify-between pr-8">
             <div className="flex items-center gap-2.5 text-amber-900 font-bold text-sm">
               <AlertTriangle className="text-amber-600 animate-bounce" size={20} />
               <span>Payment Cycle Reminders ({notificationClients.length} Action Required)</span>
             </div>
-            <span className="text-xs text-amber-700 font-medium">30-Day Recurring Cycle Alerts</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-amber-700 font-medium">30-Day Recurring Cycle Alerts</span>
+            </div>
           </div>
+          <button
+            onClick={() => setIsNotificationDismissed(true)}
+            className="absolute top-4 right-4 text-amber-700 hover:text-amber-950 hover:bg-amber-200/60 p-1.5 rounded-lg transition-colors cursor-pointer"
+            title="Dismiss notification"
+            aria-label="Close notification"
+          >
+            <X size={16} />
+          </button>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
             {notificationClients.map(({ client, statusInfo, financials }) => (
@@ -531,15 +543,27 @@ export default function ClientsTab({ user, initialSearchQuery = '', initialSelec
 
                     <div className="flex items-center gap-1">
                       <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const cWorkItems = workItems.filter(item => item.clientId === client.id);
+                          const cInvoices = invoices.filter(inv => inv.clientId === client.id);
+                          exportClientCSV(client, cWorkItems, cInvoices);
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                        title="Export Work History & Invoices to CSV"
+                      >
+                        <Download size={15} />
+                      </button>
+                      <button
                         onClick={(e) => { e.stopPropagation(); handleEditClient(client); }}
-                        className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                        className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
                         title="Edit Client Profile"
                       >
                         <Edit2 size={15} />
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); handleDeleteClient(client.id, client.name); }}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                         title="Delete Client"
                       >
                         <Trash2 size={15} />
@@ -583,14 +607,28 @@ export default function ClientsTab({ user, initialSearchQuery = '', initialSelec
                   </div>
                 </div>
 
-                {/* Bottom Action Button */}
-                <button
-                  onClick={() => setSelectedClientId(client.id)}
-                  className="w-full flex items-center justify-center gap-2 bg-slate-900 hover:bg-indigo-600 text-white py-2.5 rounded-xl text-xs font-semibold transition-all shadow-xs"
-                >
-                  Open Client Dashboard
-                  <ChevronRight size={14} />
-                </button>
+                {/* Bottom Action Buttons */}
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={() => setSelectedClientId(client.id)}
+                    className="flex-1 flex items-center justify-center gap-2 bg-slate-900 hover:bg-indigo-600 text-white py-2.5 rounded-xl text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                  >
+                    Open Dashboard
+                    <ChevronRight size={14} />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const cWorkItems = workItems.filter(item => item.clientId === client.id);
+                      const cInvoices = invoices.filter(inv => inv.clientId === client.id);
+                      exportClientCSV(client, cWorkItems, cInvoices);
+                    }}
+                    className="px-3.5 py-2.5 bg-slate-100 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-slate-700 hover:text-emerald-800 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                    title="Export Work History & Invoice Summary to CSV"
+                  >
+                    <Download size={14} className="text-emerald-600" /> CSV
+                  </button>
+                </div>
               </div>
             );
           })
