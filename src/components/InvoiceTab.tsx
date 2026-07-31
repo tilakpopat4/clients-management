@@ -782,7 +782,7 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
                     {reels.map((reel, idx) => (
                       <tr key={reel.id} className="border-b border-slate-200">
                         <td className="py-5 px-2 text-lg break-words pr-4 text-slate-800">
-                          {reel.title || <span className="text-slate-400 italic">Item description...</span>}
+                          <div className="font-medium">{reel.title || <span className="text-slate-400 italic">Item description...</span>}</div>
                         </td>
                         <td className="py-5 px-2 text-lg text-center text-slate-700">{reel.quantity}</td>
                         <td className="py-5 px-2 text-lg text-right text-slate-700">₹{reel.rate.toLocaleString('en-IN')}</td>
