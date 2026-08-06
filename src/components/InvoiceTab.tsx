@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Client, Reel, Invoice, WorkItem, UserProfile } from '../types';
-import { Plus, Trash2, Download, Receipt, FileCheck, Mail, Send, Copy, X, Check, MailCheck, CheckCircle2, AlertCircle, Loader2, FileText, Search } from 'lucide-react';
+import { Plus, Trash2, Download, Receipt, FileCheck, Mail, Send, Copy, X, Check, MailCheck, CheckCircle2, AlertCircle, Loader2, FileText, Search, Calculator, Divide } from 'lucide-react';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 import { useFirestore } from '../hooks/useFirestore';
@@ -126,6 +126,7 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
   const [isGenerating, setIsGenerating] = useState(false);
   const [discountAmount, setDiscountAmount] = useState<string>('');
   const [discountDescription, setDiscountDescription] = useState<string>('');
+  const [directGrandTotalInput, setDirectGrandTotalInput] = useState<string>('');
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [isSendingGmail, setIsSendingGmail] = useState(false);
   const [emailModalData, setEmailModalData] = useState<{
@@ -198,6 +199,47 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
     if (reels.length > 1) {
       setReels(reels.filter(r => r.id !== id));
     }
+  };
+
+  const handleApplyDirectGrandTotal = () => {
+    const targetVal = Number(directGrandTotalInput);
+    if (isNaN(targetVal) || directGrandTotalInput.trim() === '') {
+      alert("Please enter a valid amount for the Grand Total.");
+      return;
+    }
+    if (targetVal < 0) {
+      alert("Grand total cannot be negative.");
+      return;
+    }
+
+    const discount = Number(discountAmount) || 0;
+    const targetSubtotal = targetVal + discount;
+
+    if (reels.length === 0) {
+      setReels([{ id: generateUUID(), title: 'Video Editing Services', quantity: 1, rate: targetSubtotal }]);
+      return;
+    }
+
+    const n = reels.length;
+    const isTargetInteger = Number.isInteger(targetSubtotal);
+    const factor = isTargetInteger ? 1 : 100;
+
+    const totalUnits = Math.round(targetSubtotal * factor);
+    const baseUnitsPerReel = Math.floor(totalUnits / n);
+    let remainingUnits = totalUnits - (baseUnitsPerReel * n);
+
+    const newReels = reels.map((reel, idx) => {
+      const reelUnits = baseUnitsPerReel + (idx < remainingUnits ? 1 : 0);
+      const reelTargetAmount = reelUnits / factor;
+      const qty = reel.quantity > 0 ? reel.quantity : 1;
+      const computedRate = Number((reelTargetAmount / qty).toFixed(2));
+      return {
+        ...reel,
+        rate: computedRate
+      };
+    });
+
+    setReels(newReels);
   };
 
   const calculateTotal = () => {
@@ -577,6 +619,48 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
               </div>
             </div>
             
+            {/* Quick Set Direct Grand Total */}
+            <div className="mb-5 p-3.5 bg-gradient-to-r from-indigo-50/90 to-purple-50/90 border border-indigo-100 rounded-xl">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="text-xs font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <Calculator size={15} className="text-indigo-600" />
+                    Direct Grand Total Split
+                  </span>
+                  <p className="text-[11px] text-slate-600 mt-0.5">
+                    Enter target grand total to divide equally across all {reels.length} item{reels.length === 1 ? '' : 's'}.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">₹</span>
+                    <input 
+                      type="number" 
+                      min="0"
+                      placeholder="e.g. 10000"
+                      value={directGrandTotalInput}
+                      onChange={(e) => setDirectGrandTotalInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleApplyDirectGrandTotal();
+                        }
+                      }}
+                      className="w-32 sm:w-36 pl-7 pr-2 py-1.5 text-sm font-semibold border border-indigo-200 rounded-lg bg-white text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 shadow-xs"
+                    />
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={handleApplyDirectGrandTotal}
+                    className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs whitespace-nowrap flex items-center gap-1.5"
+                  >
+                    <Divide size={13} />
+                    Split Equally
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-4">
               {reels.map((reel, index) => (
                 <div key={reel.id} className="p-4 bg-slate-50 rounded border border-slate-100 relative group">
