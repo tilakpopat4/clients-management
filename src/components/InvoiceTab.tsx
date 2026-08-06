@@ -239,14 +239,21 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
     setReels(newReels);
   };
 
+  const roundToNearestHundred = (amount: number): number => {
+    if (amount <= 0) return 0;
+    // Standard hundred rounding: >150 -> 200, <150 -> 100
+    const rounded = Math.round(amount / 100) * 100;
+    return rounded === 0 && amount > 0 ? 100 : rounded;
+  };
+
   const handleRoundFigures = () => {
     if (reels.length === 0) return;
 
     const newReels = reels.map(reel => {
       const qty = reel.quantity > 0 ? reel.quantity : 1;
       const currentLineTotal = reel.quantity * reel.rate;
-      const roundedLineTotal = Math.round(currentLineTotal);
-      const newRate = Math.round(roundedLineTotal / qty);
+      const roundedLineTotal = roundToNearestHundred(currentLineTotal);
+      const newRate = Math.max(1, Math.round(roundedLineTotal / qty));
       return {
         ...reel,
         rate: newRate
@@ -681,7 +688,7 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
                     type="button"
                     onClick={handleRoundFigures}
                     className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs whitespace-nowrap flex items-center gap-1.5"
-                    title="Round off all item prices and grand total to whole numbers"
+                    title="Round prices to nearest hundred (>150 rounds to 200, <150 rounds to 100)"
                   >
                     <Coins size={13} />
                     Round Figures
@@ -789,7 +796,7 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
                     type="button"
                     onClick={handleRoundFigures}
                     className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded text-[11px] font-semibold transition-colors flex items-center gap-1 shadow-2xs"
-                    title="Round all items & grand total to whole numbers"
+                    title="Round item prices to nearest hundred (>150 -> 200, <150 -> 100)"
                   >
                     <Coins size={12} />
                     Round Figures
