@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Client, Reel, Invoice, WorkItem, UserProfile } from '../types';
-import { Plus, Trash2, Download, Receipt, FileCheck, Mail, Send, Copy, X, Check, MailCheck, CheckCircle2, AlertCircle, Loader2, FileText, Search, Calculator, Divide } from 'lucide-react';
+import { Plus, Trash2, Download, Receipt, FileCheck, Mail, Send, Copy, X, Check, MailCheck, CheckCircle2, AlertCircle, Loader2, FileText, Search, Calculator, Divide, Coins } from 'lucide-react';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 import { useFirestore } from '../hooks/useFirestore';
@@ -216,23 +216,20 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
     const targetSubtotal = targetVal + discount;
 
     if (reels.length === 0) {
-      setReels([{ id: generateUUID(), title: 'Video Editing Services', quantity: 1, rate: targetSubtotal }]);
+      setReels([{ id: generateUUID(), title: 'Video Editing Services', quantity: 1, rate: Math.round(targetSubtotal) }]);
       return;
     }
 
     const n = reels.length;
-    const isTargetInteger = Number.isInteger(targetSubtotal);
-    const factor = isTargetInteger ? 1 : 100;
-
-    const totalUnits = Math.round(targetSubtotal * factor);
-    const baseUnitsPerReel = Math.floor(totalUnits / n);
-    let remainingUnits = totalUnits - (baseUnitsPerReel * n);
+    // Divide targetSubtotal cleanly into whole integer rupees across all reels
+    const totalRupees = Math.round(targetSubtotal);
+    const baseRupees = Math.floor(totalRupees / n);
+    let remainingRupees = totalRupees - (baseRupees * n);
 
     const newReels = reels.map((reel, idx) => {
-      const reelUnits = baseUnitsPerReel + (idx < remainingUnits ? 1 : 0);
-      const reelTargetAmount = reelUnits / factor;
+      const itemRupees = baseRupees + (idx < remainingRupees ? 1 : 0);
       const qty = reel.quantity > 0 ? reel.quantity : 1;
-      const computedRate = Number((reelTargetAmount / qty).toFixed(2));
+      const computedRate = Math.round(itemRupees / qty);
       return {
         ...reel,
         rate: computedRate
@@ -240,6 +237,28 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
     });
 
     setReels(newReels);
+  };
+
+  const handleRoundFigures = () => {
+    if (reels.length === 0) return;
+
+    const newReels = reels.map(reel => {
+      const qty = reel.quantity > 0 ? reel.quantity : 1;
+      const currentLineTotal = reel.quantity * reel.rate;
+      const roundedLineTotal = Math.round(currentLineTotal);
+      const newRate = Math.round(roundedLineTotal / qty);
+      return {
+        ...reel,
+        rate: newRate
+      };
+    });
+
+    setReels(newReels);
+
+    const newSubtotal = newReels.reduce((sum, r) => sum + (r.quantity * r.rate), 0);
+    const discount = Number(discountAmount) || 0;
+    const newGrandTotal = Math.max(0, newSubtotal - discount);
+    setDirectGrandTotalInput(newGrandTotal.toString());
   };
 
   const calculateTotal = () => {
@@ -652,10 +671,20 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
                   <button 
                     type="button"
                     onClick={handleApplyDirectGrandTotal}
-                    className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs whitespace-nowrap flex items-center gap-1.5"
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs whitespace-nowrap flex items-center gap-1.5"
+                    title="Divide grand total into clean whole numbers equally"
                   >
                     <Divide size={13} />
                     Split Equally
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={handleRoundFigures}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs whitespace-nowrap flex items-center gap-1.5"
+                    title="Round off all item prices and grand total to whole numbers"
+                  >
+                    <Coins size={13} />
+                    Round Figures
                   </button>
                 </div>
               </div>
@@ -754,7 +783,18 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
                 </div>
               )}
               <div className="flex justify-between items-center pt-2 border-t border-dashed border-slate-100">
-                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Grand Total</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Grand Total</span>
+                  <button
+                    type="button"
+                    onClick={handleRoundFigures}
+                    className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded text-[11px] font-semibold transition-colors flex items-center gap-1 shadow-2xs"
+                    title="Round all items & grand total to whole numbers"
+                  >
+                    <Coins size={12} />
+                    Round Figures
+                  </button>
+                </div>
                 <span className="text-2xl font-bold text-slate-900">₹{grandTotal.toLocaleString('en-IN')}</span>
               </div>
             </div>
