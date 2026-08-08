@@ -975,11 +975,8 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
                     )}
                   </div>
 
-                  {/* Right Invoice Title & Badge */}
+                  {/* Right Invoice Title */}
                   <div className="w-1/3 text-right flex flex-col items-end">
-                    <span className="text-xs font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 border border-indigo-200/80 px-2.5 py-1 rounded-md mb-2">
-                      Official Tax Invoice
-                    </span>
                     <h2 className="text-4xl font-black text-slate-900 tracking-tight uppercase">
                       INVOICE
                     </h2>
