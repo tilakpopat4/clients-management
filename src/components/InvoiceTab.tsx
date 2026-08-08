@@ -258,7 +258,7 @@ export async function generateOffscreenPdfBlob(params: {
   container.style.position = 'fixed';
   container.style.left = '0px';
   container.style.top = '0px';
-  container.style.zIndex = '-99999';
+  container.style.zIndex = '999999';
   container.style.opacity = '1';
   container.style.pointerEvents = 'none';
   container.style.width = '794px';
