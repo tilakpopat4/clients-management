@@ -835,156 +835,251 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
             {/* The actual A4 element captured by html2pdf */}
             <div 
               id="invoice-preview-capture" 
-              className="bg-white shadow-2xl relative flex flex-col"
+              className="bg-white shadow-2xl relative flex flex-col justify-between"
               style={{ 
                 width: '210mm', 
                 minHeight: '297mm', 
-                padding: '20mm',
-                fontFamily: 'Inter, system-ui, sans-serif',
-                color: '#000000',
+                padding: '16mm 18mm',
+                fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
+                color: '#0f172a',
                 boxSizing: 'border-box'
               }}
             >
-              {/* Invoice Header */}
-              <div className="border-b-2 border-slate-800 pb-8 mb-10 flex justify-between items-end">
-                <div className="w-2/3">
-                  <h1 className="text-5xl font-extrabold uppercase tracking-widest mb-3 text-slate-900">
-                    INVOICE
-                  </h1>
-                  <p className="text-lg font-medium text-slate-500 tracking-widest uppercase">{profile?.servicesDescription || 'Video Editing Services'}</p>
-                </div>
-                <div className="w-1/3 flex flex-col items-end text-right">
-                  <div className="flex items-center gap-2 mb-1 justify-end">
-                    <Logo className="w-8 h-8 rounded-lg shadow-sm" />
-                    <p className="text-2xl font-bold text-slate-900">{profile?.name || user?.displayName || 'Video Editor'}</p>
-                  </div>
-                  {profile?.phone && <p className="text-lg text-slate-700 whitespace-nowrap">{profile.phone}</p>}
-                </div>
-              </div>
-              
-              {/* Invoice Meta & Bill To */}
-              <div className="flex justify-between mb-12">
-                <div className="w-1/2">
-                  <h2 className="text-sm font-bold mb-4 uppercase text-slate-400 tracking-widest">Bill To</h2>
-                  {selectedClient ? (
-                    <div className="text-lg leading-relaxed text-slate-900">
-                      <p className="font-bold text-2xl mb-1">{selectedClient.name}</p>
-                      {selectedClient.phone && <p className="text-slate-600">{selectedClient.phone}</p>}
-                      {selectedClient.email && <p className="text-slate-600">{selectedClient.email}</p>}
+              <div>
+                {/* Top Accent Strip & Header */}
+                <div className="flex justify-between items-start border-b-2 border-slate-900 pb-6 mb-8">
+                  {/* Left Branding */}
+                  <div className="w-2/3 pr-4">
+                    <div className="flex items-center gap-3 mb-2">
+                      <Logo className="w-10 h-10 rounded-xl shadow-xs" />
+                      <div>
+                        <h1 className="text-2xl font-black tracking-tight text-slate-900 uppercase">
+                          {profile?.name || user?.displayName || 'Video Production Studio'}
+                        </h1>
+                        <p className="text-xs font-bold text-indigo-600 uppercase tracking-widest mt-0.5">
+                          {profile?.professionalTitle || profile?.servicesDescription || 'Professional Video Editing & Content Creation'}
+                        </p>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="text-lg text-slate-400 italic mt-2">
-                      Client details will appear here
-                    </div>
-                  )}
-                </div>
-                <div className="w-1/2 text-right">
-                  <div className="mb-2 text-lg flex justify-end items-center gap-4">
-                    <span className="font-bold text-slate-400 uppercase tracking-widest text-sm">Date</span> 
-                    <span className="font-semibold text-slate-900">{new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+                    {profile?.phone && (
+                      <p className="text-sm font-medium text-slate-600 mt-2 flex items-center gap-1.5">
+                        <span className="font-bold text-slate-400 uppercase text-xs tracking-wider">Phone:</span> {profile.phone}
+                      </p>
+                    )}
                   </div>
-                  <div className="mb-2 text-lg flex justify-end items-center gap-4">
-                    <span className="font-bold text-slate-400 uppercase tracking-widest text-sm">Invoice No</span> 
-                    <span className="font-semibold text-slate-900">#INV-{String(invoices.length + 1).padStart(4, '0')}</span>
-                  </div>
-                  <div className="text-lg flex justify-end items-center gap-4">
-                    <span className="font-bold text-slate-400 uppercase tracking-widest text-sm">Last Payment Date</span> 
-                    <span className="font-semibold text-slate-900">
-                      {selectedClient?.lastPaymentDate 
-                        ? new Date(selectedClient.lastPaymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) 
-                        : 'N/A'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Line Items Table */}
-              <div className="mb-12 flex-grow">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b-2 border-slate-800">
-                      <th className="py-4 px-2 font-bold text-sm uppercase tracking-widest text-slate-900 w-1/2">Description</th>
-                      <th className="py-4 px-2 font-bold text-sm uppercase tracking-widest text-slate-900 text-center">Qty</th>
-                      <th className="py-4 px-2 font-bold text-sm uppercase tracking-widest text-slate-900 text-right">Rate</th>
-                      <th className="py-4 px-2 font-bold text-sm uppercase tracking-widest text-slate-900 text-right">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {reels.map((reel, idx) => (
-                      <tr key={reel.id} className="border-b border-slate-200">
-                        <td className="py-5 px-2 text-lg break-words pr-4 text-slate-800">
-                          <div className="font-medium">{reel.title || <span className="text-slate-400 italic">Item description...</span>}</div>
-                        </td>
-                        <td className="py-5 px-2 text-lg text-center text-slate-700">{reel.quantity}</td>
-                        <td className="py-5 px-2 text-lg text-right text-slate-700">₹{reel.rate.toLocaleString('en-IN')}</td>
-                        <td className="py-5 px-2 text-lg text-right font-bold text-slate-900">
-                          ₹{(reel.quantity * reel.rate).toLocaleString('en-IN')}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              
-              {/* Total Section */}
-              <div className="flex justify-end mb-16 avoid-break" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
-                <div className="w-1/2">
-                  <div className="flex justify-between border-b border-slate-200 py-3 text-lg">
-                    <span className="uppercase tracking-widest text-sm font-bold text-slate-500">Subtotal</span>
-                    <span className="font-semibold text-slate-800">₹{total.toLocaleString('en-IN')}</span>
-                  </div>
-                  
-                  {discount > 0 && (
-                    <div className="flex justify-between border-b border-slate-200 py-3 text-lg text-rose-600 font-medium">
-                      <span className="uppercase tracking-widest text-sm font-bold text-rose-500">Deduction {discountDescription ? `(${discountDescription})` : ''}</span>
-                      <span>-₹{discount.toLocaleString('en-IN')}</span>
-                    </div>
-                  )}
 
-                  <div className="flex justify-between border-b-2 border-slate-800 py-4 text-2xl font-bold mt-1 text-slate-900">
-                    <span className="uppercase tracking-widest text-lg">Total Due</span>
-                    <span>₹{grandTotal.toLocaleString('en-IN')}</span>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Payment Info Section */}
-              <div className="mt-auto border-t-2 border-slate-800 pt-8 flex items-start justify-between avoid-break" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
-                <div className="max-w-[60%]">
-                  <h3 className="text-sm font-bold mb-4 uppercase tracking-widest text-slate-500">Payment Details</h3>
-                  <div className="space-y-3 text-lg text-slate-900">
-                    <p className="flex items-center gap-3"><span className="font-bold w-40 text-slate-600">Method</span> UPI Transfer</p>
-                    <p className="flex items-center gap-3"><span className="font-bold w-40 text-slate-600">UPI ID</span> <span className="font-mono bg-slate-100 px-2 py-1 rounded text-base">{profile?.upiId || 'Not specified'}</span></p>
-                    <p className="flex items-center gap-3"><span className="font-bold w-40 text-slate-600">Name</span> {profile?.name || user?.displayName || 'Video Editor'}</p>
-                    <p className="flex items-center gap-3">
-                      <span className="font-bold w-40 text-slate-600">Last Payment Date</span> 
-                      <span className="font-semibold text-slate-800">
-                        {selectedClient?.lastPaymentDate 
-                          ? new Date(selectedClient.lastPaymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) 
-                          : 'N/A (First Cycle)'}
-                      </span>
+                  {/* Right Invoice Title & Badge */}
+                  <div className="w-1/3 text-right flex flex-col items-end">
+                    <span className="text-xs font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 border border-indigo-200/80 px-2.5 py-1 rounded-md mb-2">
+                      Official Tax Invoice
+                    </span>
+                    <h2 className="text-4xl font-black text-slate-900 tracking-tight uppercase">
+                      INVOICE
+                    </h2>
+                    <p className="text-sm font-mono font-bold text-slate-600 mt-1">
+                      #INV-{String(invoices.length + 1).padStart(4, '0')}
                     </p>
                   </div>
-                  <div className="mt-8 text-sm italic text-slate-500 leading-relaxed max-w-md">
-                    Thank you for your business! Please process the payment within 7 days of receiving this invoice.
+                </div>
+
+                {/* Billed To & Invoice Metadata Cards */}
+                <div className="grid grid-cols-2 gap-6 mb-8">
+                  {/* Billed To Card */}
+                  <div className="bg-slate-50/80 border border-slate-200/80 rounded-xl p-5 shadow-2xs">
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400 block mb-2">
+                      Billed To
+                    </span>
+                    {selectedClient ? (
+                      <div>
+                        <p className="font-black text-xl text-slate-900 mb-1">{selectedClient.name}</p>
+                        {selectedClient.phone && (
+                          <p className="text-sm text-slate-600 font-medium">Ph: {selectedClient.phone}</p>
+                        )}
+                        {selectedClient.email && (
+                          <p className="text-sm text-slate-600 font-medium truncate">Email: {selectedClient.email}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-slate-400 italic">
+                        Select a client to preview invoice details
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Invoice Summary Card */}
+                  <div className="bg-slate-50/80 border border-slate-200/80 rounded-xl p-5 shadow-2xs flex flex-col justify-between">
+                    <div>
+                      <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400 block mb-2">
+                        Invoice Overview
+                      </span>
+                      <div className="space-y-1.5 text-sm">
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-500 font-medium">Issue Date:</span>
+                          <span className="font-bold text-slate-900">
+                            {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </span>
+                        </div>
+                        {dateFrom && dateTo && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-500 font-medium">Billing Period:</span>
+                            <span className="font-semibold text-slate-800 text-xs">
+                              {new Date(dateFrom).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} – {new Date(dateTo).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-500 font-medium">Last Payment Date:</span>
+                          <span className="font-semibold text-slate-800">
+                            {selectedClient?.lastPaymentDate 
+                              ? new Date(selectedClient.lastPaymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) 
+                              : 'N/A (First Cycle)'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div className="bg-white p-3 border border-slate-200 shadow-sm rounded-xl flex flex-col items-center">
-                  {qrCodeUrl ? (
-                    <img 
-                      src={qrCodeUrl} 
-                      alt="UPI QR Code" 
-                      className="w-[140px] h-[140px]"
-                    />
-                  ) : (
-                    <div className="w-[140px] h-[140px] flex items-center justify-center text-slate-300 text-xs italic">
-                      Generating QR...
+
+                {/* Line Items Table */}
+                <div className="mb-8">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-900 text-white rounded-lg">
+                        <th className="py-3 px-3 font-bold text-xs uppercase tracking-wider text-slate-200 rounded-l-lg w-12 text-center">#</th>
+                        <th className="py-3 px-3 font-bold text-xs uppercase tracking-wider text-slate-200">Item Description</th>
+                        <th className="py-3 px-3 font-bold text-xs uppercase tracking-wider text-slate-200 text-center w-20">Qty</th>
+                        <th className="py-3 px-3 font-bold text-xs uppercase tracking-wider text-slate-200 text-right w-32">Rate</th>
+                        <th className="py-3 px-3 font-bold text-xs uppercase tracking-wider text-slate-200 text-right rounded-r-lg w-36">Total Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {reels.map((reel, idx) => (
+                        <tr key={reel.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-4 px-3 text-sm font-semibold text-slate-400 text-center">
+                            {String(idx + 1).padStart(2, '0')}
+                          </td>
+                          <td className="py-4 px-3 text-base font-semibold text-slate-900">
+                            {reel.title || <span className="text-slate-400 italic font-normal">Item description...</span>}
+                          </td>
+                          <td className="py-4 px-3 text-base text-center font-medium text-slate-700">
+                            {reel.quantity}
+                          </td>
+                          <td className="py-4 px-3 text-base text-right font-medium text-slate-700">
+                            ₹{reel.rate.toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-4 px-3 text-base text-right font-bold text-slate-900">
+                            ₹{(reel.quantity * reel.rate).toLocaleString('en-IN')}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Totals Section */}
+                <div className="flex justify-end mb-10 avoid-break" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+                  <div className="w-72 sm:w-80 space-y-2">
+                    <div className="flex justify-between items-center py-1.5 px-3 text-sm text-slate-600">
+                      <span className="font-semibold uppercase tracking-wider text-xs text-slate-500">Subtotal</span>
+                      <span className="font-bold text-slate-900">₹{total.toLocaleString('en-IN')}</span>
                     </div>
-                  )}
-                  <p className="text-center text-[10px] font-bold mt-3 text-slate-400 uppercase tracking-widest">Scan to Pay</p>
+
+                    {discount > 0 && (
+                      <div className="flex justify-between items-center py-1.5 px-3 text-sm text-rose-600 font-medium bg-rose-50/60 rounded-lg border border-rose-100">
+                        <span className="font-semibold uppercase tracking-wider text-xs text-rose-600">
+                          Deduction {discountDescription ? `(${discountDescription})` : ''}
+                        </span>
+                        <span className="font-bold">-₹{discount.toLocaleString('en-IN')}</span>
+                      </div>
+                    )}
+
+                    <div className="bg-slate-900 text-white p-4 rounded-xl shadow-md flex justify-between items-center mt-2">
+                      <div>
+                        <span className="text-xs font-bold uppercase tracking-widest text-indigo-300 block">Total Due</span>
+                        <span className="text-[10px] text-slate-400 font-medium">Payable via UPI / Bank</span>
+                      </div>
+                      <span className="text-2xl font-black text-white tracking-tight">₹{grandTotal.toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              
+
+              {/* Payment Details & QR Code Footer Section */}
+              <div className="border-t-2 border-slate-900 pt-6 mt-6 avoid-break" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+                <div className="grid grid-cols-12 gap-6 items-start">
+                  {/* Left Column: Bank & UPI Info */}
+                  <div className="col-span-8 space-y-3">
+                    <span className="text-xs font-black uppercase tracking-widest text-slate-900 block">
+                      Payment Information
+                    </span>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-slate-800 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                      <div>
+                        <span className="text-[11px] font-bold text-slate-400 uppercase block">Payment Method</span>
+                        <span className="font-semibold text-slate-900">UPI Transfer</span>
+                      </div>
+                      <div>
+                        <span className="text-[11px] font-bold text-slate-400 uppercase block">UPI ID</span>
+                        <span className="font-mono font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded text-xs inline-block mt-0.5">
+                          {profile?.upiId || 'Not specified'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[11px] font-bold text-slate-400 uppercase block">Payee Name</span>
+                        <span className="font-semibold text-slate-900">{profile?.name || user?.displayName || 'Video Editor'}</span>
+                      </div>
+                      <div>
+                        <span className="text-[11px] font-bold text-slate-400 uppercase block">Payment Cycle</span>
+                        <span className="font-semibold text-slate-800">
+                          {selectedClient?.lastPaymentDate 
+                            ? new Date(selectedClient.lastPaymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) 
+                            : 'N/A (First Cycle)'}
+                        </span>
+                      </div>
+                      {profile?.accountNumber && (
+                        <>
+                          <div>
+                            <span className="text-[11px] font-bold text-slate-400 uppercase block">Bank Account No</span>
+                            <span className="font-mono font-semibold text-slate-900">{profile.accountNumber}</span>
+                          </div>
+                          <div>
+                            <span className="text-[11px] font-bold text-slate-400 uppercase block">IFSC / Bank</span>
+                            <span className="font-semibold text-slate-900">{profile.ifscCode || ''} {profile.bankName ? `(${profile.bankName})` : ''}</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 italic mt-2">
+                      Thank you for your business! Please process payment within 7 days of receiving this invoice.
+                    </p>
+                  </div>
+
+                  {/* Right Column: QR Code */}
+                  <div className="col-span-4 flex flex-col items-center justify-center">
+                    <div className="bg-white p-3 border-2 border-slate-200 rounded-2xl shadow-sm flex flex-col items-center">
+                      {qrCodeUrl ? (
+                        <img 
+                          src={qrCodeUrl} 
+                          alt="UPI QR Code" 
+                          className="w-32 h-32 rounded-lg"
+                        />
+                      ) : (
+                        <div className="w-32 h-32 flex items-center justify-center text-slate-300 text-xs italic">
+                          Generating QR...
+                        </div>
+                      )}
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-2">
+                        Scan with GPay / PhonePe / Paytm
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bottom Signature & Verification Note */}
+                <div className="mt-6 pt-3 border-t border-slate-200 flex justify-between items-center text-[10px] text-slate-400 font-medium">
+                  <span>This is a computer-generated invoice statement.</span>
+                  <span>Generated on {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
