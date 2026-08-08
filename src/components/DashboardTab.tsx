@@ -109,18 +109,18 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
     return () => clearInterval(intervalId);
   }, [activeNotifications, user?.uid]);
 
-  // Calculate metrics for current month
+  // Calculate metrics for current month & overall pending amounts
   const metrics = useMemo(() => {
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
     let totalEarned = 0;
-    let totalDue = 0;
     let totalInvoicesThisMonth = 0;
     
     const clientRevenueMap = new Map<string, number>();
 
+    // 1. Calculate current month's earned revenue & invoices count
     invoices.forEach(inv => {
       const invDate = new Date(inv.date);
       const isCurrentMonth = invDate.getMonth() === currentMonth && invDate.getFullYear() === currentYear;
@@ -129,14 +129,17 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
         totalInvoicesThisMonth++;
         if (inv.status === 'Paid') {
           totalEarned += inv.totalAmount;
-        } else {
-          totalDue += inv.totalAmount;
         }
         
         const current = clientRevenueMap.get(inv.clientName) || 0;
         clientRevenueMap.set(inv.clientName, current + inv.totalAmount);
       }
     });
+
+    // 2. Calculate Total Pending Invoices Amount
+    const totalDue = invoices
+      .filter(inv => inv.status === 'Pending')
+      .reduce((sum, inv) => sum + (Number(inv.totalAmount) || 0), 0);
 
     const chartData = Array.from(clientRevenueMap.entries())
       .map(([name, value]) => ({ name, value }))
@@ -491,7 +494,7 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
             <Clock size={24} />
           </div>
           <div>
-            <p className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wider">Total Amount Due</p>
+            <p className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wider">Total Pending Invoices Amount</p>
             <h3 className="text-3xl font-bold text-slate-900">₹{metrics.totalDue.toLocaleString('en-IN')}</h3>
           </div>
         </div>
