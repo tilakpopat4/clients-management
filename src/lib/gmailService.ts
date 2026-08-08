@@ -103,10 +103,14 @@ export async function sendEmailWithPdfAttachment(params: SendEmailParams): Promi
       const pdfArrayBuffer = await params.pdfBlob.arrayBuffer();
       const bytes = new Uint8Array(pdfArrayBuffer);
       let binary = '';
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
+      const len = bytes.byteLength;
+      const chunkSize = 0x8000;
+      for (let i = 0; i < len; i += chunkSize) {
+        binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, Math.min(i + chunkSize, len))));
       }
-      const standardPdfBase64 = btoa(binary);
+      const rawBase64 = btoa(binary);
+      // MIME standard requires wrapping base64 data at 76 characters per line
+      const standardPdfBase64 = rawBase64.match(/.{1,76}/g)?.join('\r\n') || rawBase64;
 
       const mimeMessageParts = [
         `To: ${params.to.trim()}`,

@@ -255,9 +255,12 @@ export async function generateOffscreenPdfBlob(params: {
   qrCodeUrl?: string;
 }): Promise<Blob> {
   const container = document.createElement('div');
-  container.style.position = 'absolute';
-  container.style.left = '-9999px';
-  container.style.top = '-9999px';
+  container.style.position = 'fixed';
+  container.style.left = '0px';
+  container.style.top = '0px';
+  container.style.zIndex = '-99999';
+  container.style.opacity = '1';
+  container.style.pointerEvents = 'none';
   container.style.width = '794px';
   container.style.backgroundColor = '#ffffff';
   container.style.boxSizing = 'border-box';
@@ -482,6 +485,27 @@ export async function generateOffscreenPdfBlob(params: {
 
   document.body.appendChild(container);
 
+  // Ensure images (e.g. QR code) and fonts are fully decoded and rendered
+  const images = Array.from(container.querySelectorAll('img'));
+  await Promise.all(images.map(img => {
+    if (img.complete) return Promise.resolve();
+    return new Promise(resolve => {
+      img.onload = resolve;
+      img.onerror = resolve;
+    });
+  }));
+
+  if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+    try {
+      await document.fonts.ready;
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // Brief pause to allow DOM repaint
+  await new Promise(r => setTimeout(r, 120));
+
   let html2pdfFunc = html2pdf;
   if (html2pdfFunc && (html2pdfFunc as any).default) {
     html2pdfFunc = (html2pdfFunc as any).default;
@@ -494,7 +518,18 @@ export async function generateOffscreenPdfBlob(params: {
     margin: [8, 8, 8, 8] as [number, number, number, number],
     filename: `Invoice_${(params.client?.name || params.invoice.clientName).replace(/\s+/g, '_')}_${invoiceNo}.pdf`,
     image: { type: 'jpeg' as const, quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true, logging: false, width: 794 },
+    html2canvas: { 
+      scale: 2, 
+      useCORS: true, 
+      logging: false, 
+      width: 794,
+      windowWidth: 794,
+      scrollX: 0,
+      scrollY: 0,
+      x: 0,
+      y: 0,
+      backgroundColor: '#ffffff'
+    },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
     pagebreak: { mode: ['css', 'legacy'], avoid: ['.avoid-break'] }
   };
