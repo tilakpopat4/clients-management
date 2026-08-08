@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { IndianRupee, Clock, TrendingUp, CheckCircle2, DownloadCloud, UploadCloud, AlertTriangle, Send, Users, ArrowRight, Mail, Bell, Copy, Smartphone, X } from 'lucide-react';
 import { User } from 'firebase/auth';
-import { useFirestore } from '../hooks/useFirestore';
+import { useFirestore, safeStringify } from '../hooks/useFirestore';
 import { 
   getPaymentStatusInfo, 
   calculateClientFinancials, 
@@ -220,9 +220,9 @@ export default function DashboardTab({ user, onNavigateToClients }: DashboardTab
   const handleExport = () => {
     const data = {
       clients: localStorage.getItem('clients') || '[]',
-      monthlyWork: JSON.stringify(invoices),
+      monthlyWork: safeStringify(invoices),
     };
-    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    const blob = new Blob([safeStringify(data)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

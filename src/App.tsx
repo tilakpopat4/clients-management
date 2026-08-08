@@ -14,7 +14,7 @@ import GlobalHeader from './components/GlobalHeader';
 import { auth, googleProvider, db } from './firebase';
 import { signInWithPopup, onAuthStateChanged, User, signOut, GoogleAuthProvider } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { useFirestore } from './hooks/useFirestore';
+import { useFirestore, safeStringify } from './hooks/useFirestore';
 import { UserProfile } from './types';
 import ProfileModal from './components/ProfileModal';
 import Logo from './components/Logo';
@@ -91,7 +91,7 @@ export default function App() {
       const firestoreProf = profiles[0];
       setCachedProfile(firestoreProf);
       try {
-        localStorage.setItem(`crestflow_profile_${user.uid}`, JSON.stringify(firestoreProf));
+        localStorage.setItem(`crestflow_profile_${user.uid}`, safeStringify(firestoreProf));
         localStorage.setItem(`crestflow_profile_completed_${user.uid}`, 'true');
       } catch (err) {
         console.error(err);
@@ -105,7 +105,7 @@ export default function App() {
     if (!user) return;
     setCachedProfile(updatedProfile);
     try {
-      localStorage.setItem(`crestflow_profile_${user.uid}`, JSON.stringify(updatedProfile));
+      localStorage.setItem(`crestflow_profile_${user.uid}`, safeStringify(updatedProfile));
       localStorage.setItem(`crestflow_profile_completed_${user.uid}`, 'true');
     } catch (err) {
       console.error(err);

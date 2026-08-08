@@ -21,9 +21,10 @@ googleProvider.addScope('https://www.googleapis.com/auth/gmail.compose');
 export async function testFirestoreConnection() {
   try {
     await getDocFromServer(doc(db, '_connection_test', 'ping'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn("Firestore offline warning: Please check your connection or Firebase setup.");
+  } catch (error: any) {
+    const msg = error?.message || String(error);
+    if (msg.includes('offline') || msg.includes('backend') || msg.includes('10 seconds')) {
+      console.warn("Firestore operating in offline or fallback mode.");
     }
   }
 }

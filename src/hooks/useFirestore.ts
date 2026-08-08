@@ -24,21 +24,60 @@ export interface FirestoreErrorInfo {
   };
 }
 
+export function safeStringify(val: any): string {
+  if (val === undefined) return 'undefined';
+  if (val === null) return 'null';
+  if (typeof val === 'string') return val;
+  if (typeof val !== 'object') return String(val);
+
+  const seen = new WeakSet();
+  try {
+    return JSON.stringify(val, (key, value) => {
+      if (typeof value === 'object' && value !== null) {
+        if (seen.has(value)) {
+          return '[Circular]';
+        }
+        seen.add(value);
+        if (typeof window !== 'undefined' && (value instanceof Element || value === window)) {
+          return '[DOM Element]';
+        }
+      }
+      if (typeof value === 'function') {
+        return undefined;
+      }
+      return value;
+    });
+  } catch {
+    return String(val);
+  }
+}
+
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  let errorMessage = 'Unknown error';
+  if (error instanceof Error) {
+    errorMessage = error.message;
+  } else if (typeof error === 'object' && error !== null) {
+    errorMessage = (error as any).message || (error as any).code || String(error);
+  } else if (error !== undefined && error !== null) {
+    errorMessage = String(error);
+  }
+
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errorMessage,
     authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
+      userId: auth.currentUser?.uid || null,
+      email: auth.currentUser?.email || null,
+      emailVerified: auth.currentUser?.emailVerified || null,
+      isAnonymous: auth.currentUser?.isAnonymous || null,
+      tenantId: auth.currentUser?.tenantId || null,
     },
     operationType,
     path,
   };
-  console.error('Firestore Error Details:', JSON.stringify(errInfo));
-  return new Error(JSON.stringify(errInfo));
+  
+  const serialized = safeStringify(errInfo);
+  console.error('Firestore Error Details:', serialized);
+  return new Error(errorMessage);
 }
 
 // Deep clean payload to remove undefined fields recursively (including nested objects & arrays) which cause Firestore errors

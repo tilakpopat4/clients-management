@@ -246,6 +246,278 @@ function preprocessElementStylesForPdf(element: HTMLElement): () => void {
   };
 }
 
+export async function generateOffscreenPdfBlob(params: {
+  invoice: Invoice;
+  client?: Client;
+  profile: UserProfile | null;
+  dateFrom?: string;
+  dateTo?: string;
+  qrCodeUrl?: string;
+}): Promise<Blob> {
+  const container = document.createElement('div');
+  container.style.position = 'absolute';
+  container.style.left = '-9999px';
+  container.style.top = '-9999px';
+  container.style.width = '794px';
+  container.style.backgroundColor = '#ffffff';
+  container.style.boxSizing = 'border-box';
+  container.style.padding = '32px 36px';
+  container.style.fontFamily = 'Inter, system-ui, -apple-system, sans-serif';
+  container.style.color = '#0f172a';
+
+  const invoiceNo = params.invoice.id.length > 8 
+    ? `INV-${params.invoice.id.substring(0, 8).toUpperCase()}`
+    : params.invoice.id.toUpperCase();
+
+  const issueDateStr = new Date(params.invoice.date).toLocaleDateString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric'
+  });
+
+  const billingPeriodStr = params.dateFrom && params.dateTo
+    ? `${new Date(params.dateFrom).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} – ${new Date(params.dateTo).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`
+    : issueDateStr;
+
+  const lastPaymentStr = params.invoice.lastPaymentDate
+    ? new Date(params.invoice.lastPaymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    : (params.client?.lastPaymentDate 
+        ? new Date(params.client.lastPaymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+        : 'N/A (First Cycle)');
+
+  const senderName = params.profile?.name || 'Video Editor';
+  const senderTitle = params.profile?.professionalTitle || params.profile?.servicesDescription || 'Professional Video Editing & Content Creation';
+  const senderPhone = params.profile?.phone || '';
+  const upiId = params.profile?.upiId || 'Not specified';
+
+  const reels = params.invoice.reels || [];
+  const subtotal = reels.reduce((s, r) => s + (r.quantity * r.rate), 0);
+  const discount = params.invoice.discountAmount || 0;
+  const grandTotal = Math.max(0, params.invoice.totalAmount);
+
+  let qrUrl = params.qrCodeUrl || '';
+  if (!qrUrl && upiId && upiId !== 'Not specified') {
+    try {
+      const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(senderName)}&am=${grandTotal}`;
+      qrUrl = await QRCode.toDataURL(upiUri, { width: 240, margin: 1 });
+    } catch (e) {
+      console.warn("QR code generation for offscreen PDF failed:", e);
+    }
+  }
+
+  const itemsRowsHtml = reels.length === 0
+    ? `
+      <tr>
+        <td style="padding: 12px 10px; font-size: 13px; color: #64748b; text-align: center;">01</td>
+        <td style="padding: 12px 10px; font-size: 14px; color: #0f172a; font-weight: 600;">Video Editing / Content Creation Services</td>
+        <td style="padding: 12px 10px; font-size: 14px; color: #334155; text-align: center;">1</td>
+        <td style="padding: 12px 10px; font-size: 14px; color: #334155; text-align: right;">₹${grandTotal.toLocaleString('en-IN')}</td>
+        <td style="padding: 12px 10px; font-size: 14px; color: #0f172a; font-weight: 700; text-align: right;">₹${grandTotal.toLocaleString('en-IN')}</td>
+      </tr>
+    `
+    : reels.map((r, idx) => `
+      <tr style="border-bottom: 1px solid #e2e8f0;">
+        <td style="padding: 12px 10px; font-size: 13px; color: #64748b; text-align: center;">${String(idx + 1).padStart(2, '0')}</td>
+        <td style="padding: 12px 10px; font-size: 14px; color: #0f172a; font-weight: 600;">${r.title || 'Video Editing Work Item'}</td>
+        <td style="padding: 12px 10px; font-size: 14px; color: #334155; text-align: center;">${r.quantity}</td>
+        <td style="padding: 12px 10px; font-size: 14px; color: #334155; text-align: right;">₹${r.rate.toLocaleString('en-IN')}</td>
+        <td style="padding: 12px 10px; font-size: 14px; color: #0f172a; font-weight: 700; text-align: right;">₹${(r.quantity * r.rate).toLocaleString('en-IN')}</td>
+      </tr>
+    `).join('');
+
+  container.innerHTML = `
+    <div>
+      <table style="width: 100%; border-bottom: 2px solid #0f172a; padding-bottom: 18px; margin-bottom: 22px;">
+        <tr>
+          <td style="vertical-align: top; width: 65%;">
+            <div style="font-size: 22px; font-weight: 900; text-transform: uppercase; color: #0f172a; letter-spacing: -0.5px;">
+              ${senderName}
+            </div>
+            <div style="font-size: 11px; font-weight: 700; color: #4f46e5; text-transform: uppercase; letter-spacing: 1px; margin-top: 2px;">
+              ${senderTitle}
+            </div>
+            ${senderPhone ? `<div style="font-size: 12px; color: #475569; margin-top: 6px;"><b>PHONE:</b> ${senderPhone}</div>` : ''}
+          </td>
+          <td style="vertical-align: top; width: 35%; text-align: right;">
+            <div style="font-size: 30px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: -0.5px; line-height: 1;">
+              INVOICE
+            </div>
+            <div style="font-size: 13px; font-family: monospace; font-weight: 700; color: #475569; margin-top: 4px;">
+              #${invoiceNo}
+            </div>
+          </td>
+        </tr>
+      </table>
+
+      <table style="width: 100%; margin-bottom: 22px; border-spacing: 12px 0; border-collapse: separate;">
+        <tr>
+          <td style="width: 50%; vertical-align: top; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px;">
+            <span style="font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; display: block; margin-bottom: 6px;">
+              BILLED TO
+            </span>
+            <div style="font-size: 18px; font-weight: 900; color: #0f172a; margin-bottom: 4px;">
+              ${params.client?.name || params.invoice.clientName}
+            </div>
+            ${params.client?.phone ? `<div style="font-size: 12px; color: #475569;">Ph: ${params.client.phone}</div>` : ''}
+            ${params.client?.email ? `<div style="font-size: 12px; color: #475569;">Email: ${params.client.email}</div>` : ''}
+          </td>
+          <td style="width: 50%; vertical-align: top; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px;">
+            <span style="font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; display: block; margin-bottom: 6px;">
+              INVOICE OVERVIEW
+            </span>
+            <table style="width: 100%; font-size: 12px; color: #334155;">
+              <tr>
+                <td style="color: #64748b; padding: 2px 0;">Issue Date:</td>
+                <td style="text-align: right; font-weight: 700; color: #0f172a;">${issueDateStr}</td>
+              </tr>
+              <tr>
+                <td style="color: #64748b; padding: 2px 0;">Billing Period:</td>
+                <td style="text-align: right; font-weight: 600; color: #1e293b;">${billingPeriodStr}</td>
+              </tr>
+              <tr>
+                <td style="color: #64748b; padding: 2px 0;">Last Payment Date:</td>
+                <td style="text-align: right; font-weight: 600; color: #1e293b;">${lastPaymentStr}</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 22px;">
+        <thead>
+          <tr style="background-color: #0f172a; color: #ffffff;">
+            <th style="padding: 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; text-align: center; width: 40px; border-top-left-radius: 8px;">#</th>
+            <th style="padding: 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; text-align: left;">Item Description / Work Log</th>
+            <th style="padding: 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; text-align: center; width: 60px;">Qty</th>
+            <th style="padding: 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; text-align: right; width: 100px;">Rate</th>
+            <th style="padding: 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; text-align: right; width: 120px; border-top-right-radius: 8px;">Total Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsRowsHtml}
+        </tbody>
+      </table>
+
+      <table style="width: 100%; margin-bottom: 24px;">
+        <tr>
+          <td style="width: 45%;"></td>
+          <td style="width: 55%; vertical-align: top;">
+            <table style="width: 100%; font-size: 13px; color: #475569;">
+              <tr>
+                <td style="padding: 4px 0; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b;">Subtotal</td>
+                <td style="padding: 4px 0; text-align: right; font-weight: 700; color: #0f172a;">₹${subtotal.toLocaleString('en-IN')}</td>
+              </tr>
+              ${discount > 0 ? `
+              <tr>
+                <td style="padding: 4px 0; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #e11d48;">
+                  Deduction (${params.invoice.discountDescription || 'Discount'})
+                </td>
+                <td style="padding: 4px 0; text-align: right; font-weight: 700; color: #e11d48;">
+                  -₹${discount.toLocaleString('en-IN')}
+                </td>
+              </tr>
+              ` : ''}
+            </table>
+
+            <div style="background-color: #0f172a; color: #ffffff; padding: 12px 16px; border-radius: 12px; margin-top: 6px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #a5b4fc;">TOTAL DUE</div>
+                <div style="font-size: 10px; color: #94a3b8; margin-top: 1px;">Payable via UPI / Bank</div>
+              </div>
+              <div style="font-size: 22px; font-weight: 900; color: #ffffff;">₹${grandTotal.toLocaleString('en-IN')}</div>
+            </div>
+          </td>
+        </tr>
+      </table>
+
+      <table style="width: 100%; border-top: 2px solid #0f172a; padding-top: 18px;">
+        <tr>
+          <td style="vertical-align: top; width: 68%;">
+            <div style="font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: #0f172a; margin-bottom: 8px;">
+              PAYMENT INFORMATION
+            </div>
+            <table style="width: 100%; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; font-size: 12px; color: #1e293b;">
+              <tr>
+                <td style="padding: 3px 0; color: #64748b; font-size: 10px; font-weight: 700; text-transform: uppercase; width: 35%;">Payment Method:</td>
+                <td style="padding: 3px 0; font-weight: 600; color: #0f172a;">UPI Transfer</td>
+              </tr>
+              <tr>
+                <td style="padding: 3px 0; color: #64748b; font-size: 10px; font-weight: 700; text-transform: uppercase;">UPI ID:</td>
+                <td style="padding: 3px 0; font-family: monospace; font-weight: 700; color: #4f46e5;">${upiId}</td>
+              </tr>
+              <tr>
+                <td style="padding: 3px 0; color: #64748b; font-size: 10px; font-weight: 700; text-transform: uppercase;">Payee Name:</td>
+                <td style="padding: 3px 0; font-weight: 600; color: #0f172a;">${senderName}</td>
+              </tr>
+              ${params.profile?.accountNumber ? `
+              <tr>
+                <td style="padding: 3px 0; color: #64748b; font-size: 10px; font-weight: 700; text-transform: uppercase;">Bank Account:</td>
+                <td style="padding: 3px 0; font-family: monospace; font-weight: 600;">${params.profile.accountNumber}</td>
+              </tr>
+              <tr>
+                <td style="padding: 3px 0; color: #64748b; font-size: 10px; font-weight: 700; text-transform: uppercase;">IFSC / Bank:</td>
+                <td style="padding: 3px 0; font-weight: 600;">${params.profile.ifscCode || ''} ${params.profile.bankName ? `(${params.profile.bankName})` : ''}</td>
+              </tr>
+              ` : ''}
+            </table>
+            <p style="font-size: 11px; color: #64748b; font-style: italic; margin-top: 8px;">
+              Thank you for your business! Please process payment within 7 days of receiving this invoice statement.
+            </p>
+          </td>
+          <td style="vertical-align: top; width: 32%; text-align: center; padding-left: 12px;">
+            <div style="background: #ffffff; border: 2px solid #e2e8f0; border-radius: 12px; padding: 10px; display: inline-block;">
+              ${qrUrl ? `<img src="${qrUrl}" style="width: 110px; height: 110px; border-radius: 6px; display: block; margin: 0 auto;" />` : '<div style="width: 110px; height: 110px; line-height: 110px; font-size: 11px; color: #94a3b8; text-align: center;">Scan to Pay</div>'}
+              <span style="font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; display: block; margin-top: 6px;">
+                Scan with GPay / Paytm
+              </span>
+            </div>
+          </td>
+        </tr>
+      </table>
+
+      <div style="margin-top: 18px; padding-top: 10px; border-top: 1px solid #e2e8f0; font-size: 9px; color: #94a3b8; display: flex; justify-content: space-between;">
+        <span>This is a computer-generated invoice statement.</span>
+        <span>Generated on ${issueDateStr}</span>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+
+  let html2pdfFunc = html2pdf;
+  if (html2pdfFunc && (html2pdfFunc as any).default) {
+    html2pdfFunc = (html2pdfFunc as any).default;
+  }
+  if (typeof html2pdfFunc !== 'function' && typeof window !== 'undefined' && (window as any).html2pdf) {
+    html2pdfFunc = (window as any).html2pdf;
+  }
+
+  const opt = {
+    margin: [8, 8, 8, 8] as [number, number, number, number],
+    filename: `Invoice_${(params.client?.name || params.invoice.clientName).replace(/\s+/g, '_')}_${invoiceNo}.pdf`,
+    image: { type: 'jpeg' as const, quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, logging: false, width: 794 },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
+    pagebreak: { mode: ['css', 'legacy'], avoid: ['.avoid-break'] }
+  };
+
+  const restoreStyles = preprocessElementStylesForPdf(container);
+
+  try {
+    const worker = html2pdfFunc().set(opt).from(container);
+    const pdfBlob = await worker.output('blob');
+    restoreStyles();
+    if (document.body.contains(container)) {
+      document.body.removeChild(container);
+    }
+    return pdfBlob;
+  } catch (err) {
+    restoreStyles();
+    if (document.body.contains(container)) {
+      document.body.removeChild(container);
+    }
+    throw err;
+  }
+}
+
 interface InvoiceTabProps {
   user: User | null;
   profile: UserProfile | null;
@@ -296,6 +568,8 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
     totalAmount: number;
     pdfBlob?: Blob;
     pdfFilename?: string;
+    invoiceObj?: Invoice;
+    clientObj?: Client;
     gmailStatus?: { sending: boolean; success?: boolean; error?: string; messageId?: string };
   } | null>(null);
 
@@ -440,7 +714,7 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
       .catch(err => console.error("Failed to generate QR Code:", err));
   }, [grandTotal, user, profile]);
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!selectedClient) {
       alert("Please select a client first.");
       return;
@@ -452,61 +726,8 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
     }
 
     setIsGenerating(true);
-    const element = document.getElementById('invoice-preview-capture');
-    if (!element) {
-      alert("Error: Invoice preview element not found.");
-      setIsGenerating(false);
-      return;
-    }
 
-    // Resolve html2pdf function robustly in Vite/ESM environment
-    let html2pdfFunc = html2pdf;
-    if (html2pdfFunc && (html2pdfFunc as any).default) {
-      html2pdfFunc = (html2pdfFunc as any).default;
-    }
-    if (typeof html2pdfFunc !== 'function' && typeof window !== 'undefined' && (window as any).html2pdf) {
-      html2pdfFunc = (window as any).html2pdf;
-    }
-
-    if (typeof html2pdfFunc !== 'function') {
-      alert("Error: html2pdf library failed to load as a function. Please refresh and try again.");
-      setIsGenerating(false);
-      return;
-    }
-    
-    // Configure PDF options
-    const opt = {
-      margin:       0,
-      filename:     `Invoice_${selectedClient.name.replace(/\s+/g, '_')}_${new Date().toLocaleDateString('en-IN').replace(/\//g, '-')}.pdf`,
-      image:        { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true, logging: false },
-      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
-      pagebreak:    { mode: ['css', 'legacy'], avoid: ['.avoid-break'] }
-    };
-
-    // Preprocess unsupported CSS color functions (oklab, oklch, color()) inline on element and children to prevent html2canvas parsing errors
-    const restoreStyles = preprocessElementStylesForPdf(element);
-
-    const worker = html2pdfFunc().set(opt).from(element);
-
-    worker.output('blob').then(async (pdfBlob: Blob) => {
-      // Trigger browser download of PDF
-      try {
-        const downloadUrl = URL.createObjectURL(pdfBlob);
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = opt.filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      } catch (e) {
-        console.warn("Blob download fallback:", e);
-        await worker.save();
-      }
-
-      restoreStyles();
-
-      // Save invoice to cloud storage
+    try {
       const newInvoice: Invoice = {
         id: generateUUID(),
         date: Date.now(),
@@ -521,81 +742,100 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
           discountDescription: discountDescription.trim() || 'Discount/Deduction'
         } : {})
       };
-      
+
+      const filename = `Invoice_${selectedClient.name.replace(/\s+/g, '_')}_${new Date().toLocaleDateString('en-IN').replace(/\//g, '-')}.pdf`;
+
+      // 1. Generate crisp, unscaled offscreen PDF blob
+      const pdfBlob = await generateOffscreenPdfBlob({
+        invoice: newInvoice,
+        client: selectedClient,
+        profile,
+        dateFrom,
+        dateTo,
+        qrCodeUrl
+      });
+
+      // 2. Trigger browser download
       try {
-        await addInvoice(newInvoice);
-        
-        // Mark linked work items as invoiced
-        for (const workId of linkedWorkItemIds) {
-          const workItem = workItems.find(w => w.id === workId);
-          if (workItem) {
-            await updateWorkItem({ ...workItem, status: 'Invoiced', invoiceId: newInvoice.id });
-          }
-        }
-        
-        // Clear selection after successful generation
-        setReels([{ id: generateUUID(), title: '', quantity: 1, rate: selectedClient.defaultRate }]);
-        setLinkedWorkItemIds([]);
-        setDiscountAmount('');
-        setDiscountDescription('');
-
-        // Generate email details for this specific month cycle's invoice
-        const emailDetails = generateInvoiceEmailDetails(selectedClient, newInvoice, profile, dateFrom, dateTo);
-
-        const targetClientEmail = selectedClient.email ? selectedClient.email.trim() : '';
-        let initialGmailStatus: { sending: boolean; success?: boolean; error?: string; messageId?: string } = { sending: false };
-
-        if (targetClientEmail) {
-          initialGmailStatus = { sending: true };
-          // Attempt background send via Gmail API
-          sendEmailWithPdfAttachment({
-            to: targetClientEmail,
-            subject: emailDetails.subject,
-            bodyText: emailDetails.body,
-            pdfBlob: pdfBlob,
-            pdfFilename: opt.filename
-          }).then(res => {
-            if (res.success) {
-              setEmailModalData(prev => prev ? {
-                ...prev,
-                gmailStatus: { sending: false, success: true, messageId: res.id }
-              } : null);
-            } else {
-              setEmailModalData(prev => prev ? {
-                ...prev,
-                gmailStatus: { sending: false, success: false, error: res.error }
-              } : null);
-            }
-          });
-        }
-
-        // Display modal with invoice email details and action buttons
-        setEmailModalData({
-          isOpen: true,
-          clientName: selectedClient.name,
-          clientEmail: targetClientEmail,
-          subject: emailDetails.subject,
-          body: emailDetails.body,
-          mailtoLink: emailDetails.mailtoLink,
-          monthCycleStr: emailDetails.monthCycleStr,
-          invoiceNo: emailDetails.invoiceNo,
-          totalAmount: grandTotal,
-          pdfBlob: pdfBlob,
-          pdfFilename: opt.filename,
-          gmailStatus: initialGmailStatus
-        });
-      } catch (err: any) {
-        console.error("Error saving to cloud:", err);
-        alert("Error saving invoice/work items to cloud: " + (err?.message || String(err)));
+        const downloadUrl = URL.createObjectURL(pdfBlob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } catch (e) {
+        console.warn("Blob download fallback:", e);
       }
+
+      // 3. Save invoice to cloud storage
+      await addInvoice(newInvoice);
+
+      // 4. Mark linked work items as invoiced
+      for (const workId of linkedWorkItemIds) {
+        const workItem = workItems.find(w => w.id === workId);
+        if (workItem) {
+          await updateWorkItem({ ...workItem, status: 'Invoiced', invoiceId: newInvoice.id });
+        }
+      }
+
+      // 5. Clear form selection
+      setReels([{ id: generateUUID(), title: '', quantity: 1, rate: selectedClient.defaultRate }]);
+      setLinkedWorkItemIds([]);
+      setDiscountAmount('');
+      setDiscountDescription('');
+
+      // 6. Generate email details for this specific invoice
+      const emailDetails = generateInvoiceEmailDetails(selectedClient, newInvoice, profile, dateFrom, dateTo);
+      const targetClientEmail = selectedClient.email ? selectedClient.email.trim() : '';
+      let initialGmailStatus: { sending: boolean; success?: boolean; error?: string; messageId?: string } = { sending: false };
+
+      if (targetClientEmail) {
+        initialGmailStatus = { sending: true };
+        sendEmailWithPdfAttachment({
+          to: targetClientEmail,
+          subject: emailDetails.subject,
+          bodyText: emailDetails.body,
+          pdfBlob: pdfBlob,
+          pdfFilename: filename
+        }).then(res => {
+          if (res.success) {
+            setEmailModalData(prev => prev ? {
+              ...prev,
+              gmailStatus: { sending: false, success: true, messageId: res.id }
+            } : null);
+          } else {
+            setEmailModalData(prev => prev ? {
+              ...prev,
+              gmailStatus: { sending: false, success: false, error: res.error }
+            } : null);
+          }
+        });
+      }
+
+      setEmailModalData({
+        isOpen: true,
+        clientName: selectedClient.name,
+        clientEmail: targetClientEmail,
+        subject: emailDetails.subject,
+        body: emailDetails.body,
+        mailtoLink: emailDetails.mailtoLink,
+        monthCycleStr: emailDetails.monthCycleStr,
+        invoiceNo: emailDetails.invoiceNo,
+        totalAmount: grandTotal,
+        pdfBlob: pdfBlob,
+        pdfFilename: filename,
+        invoiceObj: newInvoice,
+        clientObj: selectedClient,
+        gmailStatus: initialGmailStatus
+      });
+
+    } catch (err: any) {
+      console.error("PDF generation / save error:", err);
+      alert("An error occurred while generating or saving the PDF: " + (err?.message || String(err)));
+    } finally {
       setIsGenerating(false);
-      
-    }).catch((err: any) => {
-      restoreStyles();
-      console.error(err);
-      setIsGenerating(false);
-      alert("An error occurred while generating the PDF: " + (err?.message || String(err)));
-    });
+    }
   };
 
   const handleSendGmailManual = async () => {
@@ -611,24 +851,12 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
 
     try {
       let currentPdfBlob = emailModalData.pdfBlob;
-      if (!currentPdfBlob) {
-        const element = document.getElementById('invoice-preview-capture') || document.getElementById('invoice-preview-container');
-        if (element) {
-          const restoreStyles = preprocessElementStylesForPdf(element as HTMLElement);
-          try {
-            currentPdfBlob = await html2pdf().set({
-              margin: [10, 10, 10, 10],
-              filename: emailModalData.pdfFilename || `Invoice_${emailModalData.invoiceNo}.pdf`,
-              image: { type: 'jpeg', quality: 0.98 },
-              html2canvas: { scale: 2, useCORS: true, logging: false },
-              jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-            }).from(element).output('blob');
-          } catch (e) {
-            console.warn("Could not generate on-the-fly PDF blob:", e);
-          } finally {
-            restoreStyles();
-          }
-        }
+      if (!currentPdfBlob && emailModalData.invoiceObj) {
+        currentPdfBlob = await generateOffscreenPdfBlob({
+          invoice: emailModalData.invoiceObj,
+          client: emailModalData.clientObj,
+          profile
+        });
       }
 
       const token = await acquireGmailAccessToken();
@@ -644,6 +872,7 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
       if (res.success) {
         setEmailModalData(prev => prev ? {
           ...prev,
+          pdfBlob: currentPdfBlob,
           gmailStatus: { sending: false, success: true, messageId: res.id }
         } : null);
       } else {
@@ -1318,8 +1547,19 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
                       <td className="p-3.5 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
-                            onClick={() => {
+                            onClick={async () => {
                               const pdfFilename = `Invoice_${clientObj.name.replace(/\s+/g, '_')}_${inv.id.substring(0, 8)}.pdf`;
+                              let pdfBlob: Blob | undefined = undefined;
+                              try {
+                                pdfBlob = await generateOffscreenPdfBlob({
+                                  invoice: inv,
+                                  client: clientObj,
+                                  profile
+                                });
+                              } catch (e) {
+                                console.warn("Could not pre-generate PDF blob for history invoice:", e);
+                              }
+
                               setEmailModalData({
                                 isOpen: true,
                                 clientName: inv.clientName,
@@ -1331,6 +1571,9 @@ export default function InvoiceTab({ user, profile, initialSearchQuery = '' }: I
                                 invoiceNo: inv.id.substring(0, 8).toUpperCase(),
                                 totalAmount: inv.totalAmount,
                                 pdfFilename: pdfFilename,
+                                pdfBlob: pdfBlob,
+                                invoiceObj: inv,
+                                clientObj: clientObj,
                                 gmailStatus: { sending: false }
                               });
                             }}
